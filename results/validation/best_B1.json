@@ -1,0 +1,72 @@
+{
+  "name": "best SA design, Kleopatra 3 d (seed 3, J = 0.2141)",
+  "asteroid": {
+    "source": "kleopatra"
+  },
+  "config": {
+    "mu": 0.1982,
+    "p_rot_h": 5.385,
+    "dt_min": 10.0,
+    "camera": 1,
+    "gsd_max_m": 20.0,
+    "eta_max_deg": 65.0,
+    "occlusion": true,
+    "lighting": true,
+    "shadows": true,
+    "sun_lat_deg": 0.0,
+    "incidence_max_deg": 70.0,
+    "p_base_w": 50.0,
+    "p_cam_w": 10.0,
+    "e_img_j": 100.0,
+    "p_tx_w": 30.0,
+    "downlink_bps": 100000.0,
+    "p_solar_w": 180.0,
+    "battery_wh": 200.0,
+    "eclipse_radius_km": 55.3,
+    "r0": 320.0,
+    "body": "kleopatra",
+    "n_max": 5,
+    "fixed_n": false,
+    "t_min_days": 0.25,
+    "t_max_days": 3.0,
+    "kappa": 1.5,
+    "r_min": null,
+    "r_max": 650.0,
+    "d_sep": 10.0,
+    "soc_min": 0.2,
+    "weights": [
+      0.5,
+      0.15,
+      0.15,
+      0.2
+    ],
+    "n_ref": 10,
+    "infeasible_cost": 1000.0,
+    "rho": 1000.0
+  },
+  "design": {
+    "N": 2,
+    "T_days": 0.7719462202928011,
+    "spacecraft": [
+      {
+        "a": 407.36429340649954,
+        "inc": 29.34632681488253,
+        "raan": 184.86852768906041,
+        "M0": 62.24654248960677
+      },
+      {
+        "a": 413.7811746388693,
+        "inc": 30.45621716193792,
+        "raan": 0.35490097578800617,
+        "M0": 266.7724321435983
+      }
+    ]
+  },
+  "algorithm": {
+    "name": "sa",
+    "params": {
+      "max_evals": 2000,
+      "seed": 3
+    }
+  }
+}

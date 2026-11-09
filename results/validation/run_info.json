@@ -1,0 +1,26 @@
+{
+  "command": "experiments/validate.py --only H B --seeds 5 --workers 9",
+  "parts": [
+    "H",
+    "B"
+  ],
+  "seeds": 5,
+  "evals": 2000,
+  "workers": 9,
+  "quick": false,
+  "started": "2026-11-08 15:21:49",
+  "_t0": 1794180109.887079,
+  "git_branch": "",
+  "git_commit": "",
+  "uncommitted_changes": false,
+  "python": "3.9.6",
+  "machine": "macOS-26.6-arm64-arm-64bit",
+  "cpus": 10,
+  "threads_per_worker": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "finished": "2026-11-08 15:47:12",
+  "wall_seconds": 1523
+}

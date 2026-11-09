@@ -1,0 +1,58 @@
+\chapter{Case Studies}
+\label{ch:cases}
+
+The algorithm is tested on case studies of increasing size and difficulty. They differ in the
+body (Eros, 1\,499 facets; Kleopatra, 46 times the surface and 4\,092 facets), the longest allowed
+mission $T_{\max}$ (from two hours to ten days, i.e.\ from 13 to 1\,441 simulated steps), and the
+number of slots $N_{\max}$ (5 or 10, i.e.\ 26 or 51 decision variables). Short missions are the
+hard ones: the asteroid turns only a few times, so \emph{where} each spacecraft is \emph{when}
+decides what can be seen, and the fitness landscape becomes rugged.
+
+In every case the mission duration is searched in $[T_{\min},T_{\max}]$ with
+$T_{\min}=\min(6\,\mathrm{h},\,T_{\max}/4)$, and all other settings are those of
+Tables~\ref{tab:params} and~\ref{tab:saparams}. Every \ac{SA} run uses 2000 evaluations, and every
+case is repeated with independent random seeds (a seed fixes all random choices of one run:
+start designs, moves and acceptances), so that the mean and spread of the results can be
+reported. Table~\ref{tab:cases} lists the cases and their input parameters.
+
+\begin{table}[htbp]
+\centering
+\caption{Case studies and their input parameters (budget 2000 evaluations per run)}
+\label{tab:cases}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}p{0.5cm}p{2.9cm}p{0.9cm}p{0.9cm}p{0.8cm}p{0.8cm}p{0.6cm}X@{}}
+\toprule
+Case & Body, setting & $T_{\max}$ & $T_{\min}$ & $N_{\max}$ & dim & Seeds & Question \\
+\midrule
+A1 & Eros & 10 d & 6 h & 5 & 26 & 5 & long mission: coverage saturates \\
+A2 & Eros & 1 d & 6 h & 5 & 26 & 5 & \multirow{5}{=}{How do fleet size, orbits and duration change as the time available shrinks?} \\
+A3 & Eros & 1 d & 6 h & 10 & 51 & 5 & \\
+A4 & Eros & 12 h & 3 h & 10 & 51 & 5 & \\
+A5 & Eros & 6 h & 1.5 h & 10 & 51 & 5 & \\
+A6 & Eros & 2 h & 0.5 h & 10 & 51 & 5 & \\
+\midrule
+B1 & Kleopatra & 3 d & 6 h & 5 & 26 & 5 & \multirow{3}{=}{Does the method carry over unchanged to a 6.5$\times$ larger, strongly concave body?} \\
+B2 & Kleopatra & 3 d & 6 h & 10 & 51 & 5 & \\
+B3 & Kleopatra & 12 h & 3 h & 10 & 51 & 5 & \\
+\midrule
+C1 & Eros, $N$ forced to 1--6 & 2 d & 6 h & $N$ & $1{+}5N$ & 5 & \multirow{3}{=}{Is the fleet size \ac{SA} chooses really the best? (V6)} \\
+C2 & Eros, $N$ forced to 1--8 & 6 h & 1.5 h & $N$ & $1{+}5N$ & 5 & \\
+C3 & Kleopatra, $N$ forced to 1--5 & 3 d & 6 h & $N$ & $1{+}5N$ & 3 & \\
+\midrule
+D & Eros, no Sun / shadows & 10 d & 6 h & 5 & 26 & 5 & comparison with the literature (V5) \\
+E & Eros, SA parameters varied & 2 d & 6 h & 5 & 26 & 5 & effect of $\alpha$, $p_0$, $\sigma_0$, warm start \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Cases A and B are also solved by random search with the same budget (validation V4). Cases C1--C3
+fix every switch to 1 (so $N=N_{\max}$) and optimise only the orbits and the duration; each is
+compared with a free-$N$ \ac{SA} run of the same mission with $N_{\max}=10$. In case~E one
+parameter at a time is changed from the defaults of Table~\ref{tab:saparams} (values in
+Section~\ref{sec:params}).
+
+Table~\ref{tab:cost} shows how the cost of one run grows with the case. The time per evaluation
+depends mostly on how many new spacecraft tracks have to be simulated and on their length
+($T_{\max}/\Delta t$ steps) times the number of facets.
+
+\input{generated/tab_runtime}

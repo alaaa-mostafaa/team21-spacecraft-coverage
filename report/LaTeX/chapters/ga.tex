@@ -1,0 +1,882 @@
+\chapter{Genetic Algorithm Implementation}
+\label{ch:ga}
+
+A \ac{GA}~\cite{holland1975,goldberg1989} evolves a \emph{population} of candidate designs instead
+of a single one. In every generation the designs are scored, the better ones are selected as
+parents, their genes are recombined (crossover) and slightly perturbed (mutation), and the children
+form the next generation. The \ac{GA} plugs into the same Algorithm $\rightarrow$ Feasibility
+$\rightarrow$ Engine pipeline as \ac{SA} (Figure~\ref{fig:arch}): it only proposes decision vectors
+and reads back their cost, under the same evaluation budget $B$, so the two algorithms are compared
+on equal terms. Like \ac{SA}, it is written from scratch with NumPy only.
+
+%=====================================================================================
+\section{Chromosome representation}
+\label{sec:ga-chromosome}
+
+The \ac{GA} uses the decision vector $\mathbf{x}$ of Eq.~(\ref{eq:x}) directly as its chromosome;
+no re-encoding is needed. Four levels are distinguished (Figure~\ref{fig:chromosome}):
+
+\begin{itemize}
+  \item \textbf{Gene:} one entry of $\mathbf{x}$, e.g.\ the orbit radius $a_2$ of slot~2.
+  \item \textbf{Slot} $\mathbf{y}_i=[a_i,\iota_i,\Omega_i,M_{0,i},s_i]$: the five genes of one
+        spacecraft (its circular orbit and its on/off switch).
+  \item \textbf{Chromosome} $\mathbf{x}=[T,\mathbf{y}_1,\dots,\mathbf{y}_{N_{\max}}]$: one
+        \emph{individual}, i.e.\ one complete mission design (the whole fleet and the mission
+        duration), with $\dim\mathbf{x}=1+5N_{\max}$ genes (26 for $N_{\max}=5$, 51 for $N_{\max}=10$).
+  \item \textbf{Population:} the $P$ chromosomes (candidate missions) of one generation.
+\end{itemize}
+
+\paragraph{Why a chromosome is a whole mission and not one spacecraft.} The fitness $J$
+(Eq.~\ref{eq:J}) is only defined for a complete design: the coverage $C$ is the area imaged by the
+\emph{union} of all spacecraft (two spacecraft imaging the same region are worth less than two
+imaging different regions), the fleet cost $Z$ depends on how many spacecraft fly, the separation
+constraint g3 couples \emph{pairs} of spacecraft, and the duration $T$ is shared by the whole fleet.
+The unit that is evaluated and selected must therefore be the full mission.
+
+\paragraph{Why a fixed length.} The fleet size is not stored; it follows from the switches,
+$N=\sum_i s_i$ (Eq.~\ref{eq:N}). Every chromosome has the same $1+5N_{\max}$ genes whatever its
+$N$, so standard crossover and mutation apply between any two parents, including parents with
+different fleet sizes, and the \ac{GA} searches exactly the same space as \ac{SA}.
+
+\paragraph{Why real coding.} The genes are kept as real numbers (and a binary switch) instead of
+being converted to bit strings: a binary code would add Hamming cliffs (neighbouring values that
+differ in many bits), a fixed precision, and would break the periodicity of the angles $\Omega_i$
+and $M_{0,i}$. The existing \texttt{repair} operator already handles every gene kind: $T$, $a_i$
+and $\iota_i$ are reflected at their bounds, $\Omega_i$ and $M_{0,i}$ wrap at $360^\circ$, and the
+switches are rounded to $0/1$ with at least one switched on.
+
+\paragraph{Active and dormant genes.} The orbit genes of a switched-off slot are carried along
+but do not affect $J$ (\emph{dormant} genes). At any time the \emph{active} genes are $T$, all
+$N_{\max}$ switches and the four orbit genes of each flying spacecraft, $1+N_{\max}+4N$ in total
+(18 of the 26 genes in Figure~\ref{fig:chromosome}). Mutation acts on active genes only, so no
+evaluation is spent on a change that cannot alter the fitness; the dormant genes are still
+inherited, so switching a slot back on can revive an orbit found earlier in the search.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    font=\sffamily,
+    swatch/.style={minimum width=0.38cm, minimum height=0.26cm, inner sep=0pt, rounded corners=1pt},
+    legend/.style={font=\sffamily\scriptsize, inner sep=1pt, anchor=west},
+    brace/.style={decorate, decoration={brace, mirror, amplitude=4pt}, line width=0.7pt, gray!70!black},
+  ]
+  % ---------------------------------------------------------------- (a) one chromosome
+  \node[font=\sffamily\bfseries\small, anchor=west] at (-0.1,2.05) {(a) One chromosome = one individual = one complete mission design};
+
+  % head gene: mission duration T
+  \fill[headc, rounded corners=3pt] (0,0) rectangle (1.0,0.95);
+  \node[text=white, font=\small] at (0.5,0.66) {$T$};
+  \node[text=white, font=\scriptsize] at (0.5,0.27) {1.4\,d};
+  \node[font=\sffamily\scriptsize\bfseries, text=headc] at (0.5,1.32) {Mission};
+  \node[font=\sffamily\tiny, text=headc] at (0.5,1.08) {duration};
+
+  % five slots: id / colour / switch / a / inc / raan / M0
+  \foreach \sid/\col/\sw/\va/\vi/\vO/\vM in {1/sc1/1/50/30/0/0, 2/sc2/1/45/90/60/120,
+                                             3/offc/0/63/45/300/10, 4/sc4/1/40/120/200/240,
+                                             5/offc/0/80/10/90/45} {
+    \pgfmathsetmacro{\x}{1.22+3.32*(\sid-1)}
+    \ifnum\sw=1
+      \def\tc{black}\def\swc{white}\def\stxt{flying}\tikzset{bord/.style={solid}}
+    \else
+      \def\tc{gray}\def\swc{gray!60!black}\def\stxt{switched off: dormant genes}\tikzset{bord/.style={dashed}}
+    \fi
+    % gene kinds: bounded reals (a, inc) | angles (raan, M0) | switch (s)
+    \fill[fill=\col!22] (\x,0) rectangle ++(1.24,0.95);
+    \fill[fill=\col!45] ({\x+1.24},0) rectangle ++(1.24,0.95);
+    \fill[fill=\col!85] ({\x+2.48},0) rectangle ++(0.62,0.95);
+    \foreach \k in {1,...,4} { \draw[white, line width=1pt] ({\x+0.62*\k},0) -- ++(0,0.95); }
+    \draw[draw=\col!85!black, line width=0.9pt, rounded corners=2pt, bord] (\x,0) rectangle ++(3.1,0.95);
+    % gene symbols (top) and example values (bottom)
+    \node[font=\small, text=\tc] at ({\x+0.31},0.66) {$a_{\sid}$};
+    \node[font=\small, text=\tc] at ({\x+0.93},0.66) {$\iota_{\sid}$};
+    \node[font=\small, text=\tc] at ({\x+1.55},0.66) {$\Omega_{\sid}$};
+    \node[font=\small, text=\tc] at ({\x+2.17},0.66) {$M_{0,\sid}$};
+    \node[font=\small, text=\swc] at ({\x+2.79},0.66) {$s_{\sid}$};
+    \node[font=\scriptsize, text=\tc] at ({\x+0.31},0.27) {\va};
+    \node[font=\scriptsize, text=\tc] at ({\x+0.93},0.27) {$\vi^\circ$};
+    \node[font=\scriptsize, text=\tc] at ({\x+1.55},0.27) {$\vO^\circ$};
+    \node[font=\scriptsize, text=\tc] at ({\x+2.17},0.27) {$\vM^\circ$};
+    \node[font=\scriptsize\bfseries, text=\swc] at ({\x+2.79},0.27) {\sw};
+    % header
+    \node[font=\sffamily\scriptsize\bfseries, text=\col!85!black] at ({\x+1.55},1.32) {Slot \sid{} $\cdot$ spacecraft \sid};
+    \node[font=\sffamily\tiny, text=\col!85!black] at ({\x+1.55},1.08) {\stxt};
+  }
+
+  % braces: gene, slot, chromosome
+  \draw[brace] (1.24,-0.08) -- (1.82,-0.08) node[midway, below=4pt, font=\sffamily\scriptsize, align=center] {one gene\\[-1pt]($a_1$ = 50\,km)};
+  \draw[brace] (4.56,-0.08) -- (7.62,-0.08) node[midway, below=4pt, font=\sffamily\scriptsize, align=center] {one slot = one spacecraft\\[-1pt]$\mathbf{y}_2$: 5 genes};
+  \node[font=\sffamily\scriptsize, anchor=west, align=left] at (9.2,-0.45)
+       {$N=\sum_i s_i = 1+1+0+1+0 = 3$ spacecraft fly;\\[-1pt]
+        active genes: $1+N_{\max}+4N = 18$ of 26};
+  \draw[brace, line width=0.9pt, decoration={brace, mirror, amplitude=6pt}] (0,-1.15) -- (17.58,-1.15)
+       node[midway, below=7pt, font=\sffamily\small] {chromosome $\mathbf{x}$: $\dim\mathbf{x} = 1 + 5N_{\max} = 1 + 5\times5 = 26$ genes};
+
+  % legend
+  \node[swatch, fill=headc] (l1) at (0.25,-2.3) {};
+  \node[legend, right=2pt of l1] (t1) {mission duration (bounded real)};
+  \node[swatch, fill=sc1!22, right=12pt of t1] (l2) {};
+  \node[legend, right=2pt of l2] (t2) {bounded real, reflected at the bounds ($a_i$, $\iota_i$)};
+  \node[swatch, fill=sc1!45] (l3) at (0.25,-2.75) {};
+  \node[legend, right=2pt of l3] (t3) {angle, wraps at $360^\circ$ ($\Omega_i$, $M_{0,i}$)};
+  \node[swatch, fill=sc1!85, right=12pt of t3] (l4) {};
+  \node[legend, right=2pt of l4] (t4) {binary switch ($s_i$)};
+  \node[swatch, fill=offc!22, draw=offc!85!black, dashed, right=12pt of t4] (l5) {};
+  \node[legend, right=2pt of l5] {switched-off slot};
+
+  % ---------------------------------------------------------------- (b) the population
+  \node[font=\sffamily\bfseries\small, anchor=west] at (-0.1,-3.55) {(b) Population = $P$ chromosomes (candidate missions) per generation};
+  \def\xo{1.1}
+  \foreach \r/\lab/\bA/\bB/\bC/\bD/\bE/\n in {0/1/1/1/0/1/0/3, 1/2/0/1/1/0/0/2, 2/3/1/1/1/1/1/5,
+                                               3/4/1/0/0/0/0/1, 4/5/0/1/0/1/1/3, 6/P/0/0/1/1/0/2} {
+    \pgfmathsetmacro{\y}{-4.35-0.45*\r}
+    \fill[fill=headc, rounded corners=1pt] (\xo,\y) rectangle ++(0.3,0.3);
+    \foreach \j/\bit in {1/\bA, 2/\bB, 3/\bC, 4/\bD, 5/\bE} {
+      \pgfmathsetmacro{\xs}{\xo+0.4+0.9*(\j-1)}
+      \ifnum\bit=1 \def\pc{sc1}\else\def\pc{offc}\fi
+      \fill[fill=\pc!22] (\xs,\y) rectangle ++(0.32,0.3);
+      \fill[fill=\pc!45] ({\xs+0.32},\y) rectangle ++(0.32,0.3);
+      \fill[fill=\pc!85] ({\xs+0.64},\y) rectangle ++(0.16,0.3);
+    }
+    \node[font=\sffamily\scriptsize, anchor=east] at ({\xo-0.08},{\y+0.15}) {\lab};
+    \node[font=\sffamily\scriptsize, anchor=west] at ({\xo+4.95},{\y+0.15}) {$N=\n$};
+  }
+  \node[font=\small] at ({\xo+2.4},-6.45) {$\vdots$};
+  \draw[draw=sc1!70!black, line width=0.9pt, rounded corners=2pt] ({\xo-0.06},-4.41) rectangle ({\xo+5.85},-3.99);
+  \draw[decorate, decoration={brace, amplitude=5pt}, line width=0.7pt, gray!70!black] (0.45,-7.05) -- (0.45,-4.0)
+       node[midway, left=6pt, font=\sffamily\small, text=black] {$P$};
+  \node[font=\sffamily\scriptsize, text=sc1!70!black, anchor=west] at ({\xo+6.0},-4.2) {$\leftarrow$ the chromosome of (a)};
+
+  \node[font=\sffamily\scriptsize, anchor=north west, text width=9.2cm, align=left] at (8.3,-4.6)
+     {Each row is one candidate fleet. Individuals differ in their orbits \emph{and} in their
+      fleet size $N$, because $N$ is set by the switches. In every generation all $P$ individuals
+      are evaluated by the pipeline (Feasibility $\rightarrow$ Engine); the better ones are
+      selected as parents, and crossover and mutation produce the next generation.};
+\end{tikzpicture}%
+}
+\caption{Chromosome representation of the \ac{GA}. (a)~A gene is one number, a slot is the five
+genes of one spacecraft, and the chromosome is the whole decision vector (Eq.~\ref{eq:x}): the
+mission duration followed by $N_{\max}$ slots. In this example ($N_{\max}=5$) slots 1, 2 and 4 fly
+($N=3$); the orbit genes of slots 3 and 5 are dormant but still inherited. (b)~The population holds
+$P$ such chromosomes, each a complete mission with its own fleet size.}
+\label{fig:chromosome}
+\end{figure}
+
+%=====================================================================================
+\section{Population size}
+\label{sec:ga-popsize}
+
+The population size $P$ is set from the length of the chromosome:
+\begin{equation}
+P=\min\!\Bigl(60,\;\max\!\Bigl(30,\;10\Bigl\lceil\tfrac{1.5\,\dim\mathbf{x}}{10}\Bigr\rceil\Bigr)\Bigr)
+\quad\Rightarrow\quad
+P=40\ \ (N_{\max}=5,\ \dim\mathbf{x}=26),\qquad P=60\ \ (N_{\max}=10,\ \dim\mathbf{x}=51).
+\label{eq:popsize}
+\end{equation}
+With elitism (the $n_e$ best individuals are copied unchanged into the next generation), each
+generation after the first costs $P-n_e$ evaluations, so a budget of $B$ evaluations gives
+\begin{equation}
+G = 1+\Bigl\lceil\frac{B-P}{P-n_e}\Bigr\rceil
+\label{eq:generations}
+\end{equation}
+generations. Table~\ref{tab:popsize} lists the resulting settings. The choice rests on four
+arguments.
+
+\begin{table}[htbp]
+\centering
+\caption{Population size and number of generations for the budget $B=2000$ used by \ac{SA}, with
+the default elite share $\varepsilon=5\,\%$ (Section~\ref{sec:ga-split}).}
+\label{tab:popsize}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Case studies & $N_{\max}$ & $\dim\mathbf{x}$ & $P$ & $n_e$ & $G$ \\
+\midrule
+Eros 10\,d / 1\,d, Kleopatra 3\,d                           & 5  & 26 & 40 & 2 & 53 \\
+Eros 1\,d / 12\,h / 6\,h / 2\,h, Kleopatra 3\,d / 12\,h ($N_{\max}=10$) & 10 & 51 & 60 & 3 & 36 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{1. Diversity across the genes.} A population that is small compared with the number
+of genes cannot hold enough different values of every gene at once; crossover then has little to
+recombine and the population collapses onto one design early (premature convergence). A common
+rule of thumb is a population between one and two times the number of decision variables;
+$P\approx1.5\dim\mathbf{x}$ sits in the middle of that range.
+
+\paragraph{2. Every fleet size must be represented.} The fleet size is encoded by the switches.
+In the random initial population each switch is on with probability $\tfrac12$, so $N$ follows a
+binomial distribution (an all-off draw is repaired to $N=1$). Table~\ref{tab:popN} gives the
+expected number of individuals per fleet size. With $P=40$ and $N_{\max}=5$ every fleet size from
+1 to 4 starts with at least six individuals, so the competition between fleet sizes is decided by
+selection and not by chance. For $N_{\max}=10$ small fleets are rare in a uniform start
+(fewer than one individual with $N=1$, about three with $N=2$), although \ac{SA} found that two to
+four spacecraft are best (Chapter~\ref{ch:results}); the initial population is therefore
+spread evenly over the fleet sizes (Section~\ref{sec:ga-init}).
+
+\begin{table}[htbp]
+\centering
+\caption{Expected number of individuals per fleet size $N$ in a uniformly random initial
+population, $P\cdot\Pr(N)$ with $N\sim\mathrm{Binomial}(N_{\max},\tfrac12)$ and an all-off draw
+counted as $N=1$.}
+\label{tab:popN}
+\footnotesize
+\begin{tabular}{@{}lccccccccccc@{}}
+\toprule
+ & \multicolumn{10}{c}{fleet size $N$} \\
+\cmidrule(l){2-11}
+ & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 \\
+\midrule
+$N_{\max}=5$, $P=40$  & 7.5 & 12.5 & 12.5 & 6.3 & 1.3 & -- & -- & -- & -- & -- \\
+$N_{\max}=10$, $P=60$ & 0.6 & 2.6 & 7.0 & 12.3 & 14.8 & 12.3 & 7.0 & 2.6 & 0.6 & 0.1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{3. A fixed budget forces a trade-off.} \ac{GA} and \ac{SA} receive the same budget
+$B$, so $P\cdot G\approx B$: every individual added to the population removes evaluations from
+later generations. A small population converges early; a large one leaves too few generations
+for selection and crossover to act. In the limit $P=B$ the \ac{GA} is a single random generation,
+i.e.\ random search, which validation V4 already showed to be clearly worse than \ac{SA}. The cap
+of 60 for $N_{\max}=10$ follows from this: $1.5\times51\approx77$ individuals would leave only about
+28 generations.
+
+\paragraph{4. The cost of a generation.} The engine caches the simulation of every spacecraft by
+its four orbit genes (Chapter~\ref{ch:sa}). A child that inherits whole slots from its parents
+reuses their cached simulations, so the cost of an evaluation comes mainly from mutated orbits,
+not from the population size. A population holds at most $P\,N_{\max}$ distinct orbits (200 for
+$N_{\max}=5$, 600 for $N_{\max}=10$); the cache size is raised from 256 to 1024 orbits so that the
+parents' simulations are not evicted while their children are evaluated. Caching does not change
+any fitness value, only the run time.
+
+The value of Eq.~(\ref{eq:popsize}) is a starting point. It is checked in the parameter study by
+repeating the runs with $P=10$, 20, 40, 80 and 120 at the same budget.
+
+%=====================================================================================
+\section{Initial population}
+\label{sec:ga-init}
+
+Two ways of drawing the first generation are compared:
+\begin{itemize}
+  \item \textbf{Uniform:} every gene is drawn uniformly within its bounds and every switch is a
+        coin flip. The fleet size then follows a binomial distribution (Table~\ref{tab:popN}):
+        medium fleets are common, small and large fleets rare.
+  \item \textbf{Stratified} (default): the population is first divided into $N_{\max}$ equal
+        groups, one per fleet size $N=1,\dots,N_{\max}$ (the remainder of $P/N_{\max}$, if any, is
+        assigned to randomly chosen sizes). In the group of size $N$, exactly $N$ randomly chosen
+        slots are switched on; all orbit genes and $T$ are then drawn uniformly as before.
+\end{itemize}
+
+\begin{table}[htbp]
+\centering
+\caption{Number of individuals per fleet size $N$ in the first generation (uniform: expected value).}
+\label{tab:init}
+\footnotesize
+\begin{tabular}{@{}llcccccccccc@{}}
+\toprule
+ & & \multicolumn{10}{c}{fleet size $N$} \\
+\cmidrule(l){3-12}
+ & & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 \\
+\midrule
+\multirow{2}{*}{$N_{\max}=5$, $P=40$}  & uniform    & 7.5 & 12.5 & 12.5 & 6.3 & 1.3 & -- & -- & -- & -- & -- \\
+                                       & stratified & 8 & 8 & 8 & 8 & 8 & -- & -- & -- & -- & -- \\
+\midrule
+\multirow{2}{*}{$N_{\max}=10$, $P=60$} & uniform    & 0.6 & 2.6 & 7.0 & 12.3 & 14.8 & 12.3 & 7.0 & 2.6 & 0.6 & 0.1 \\
+                                       & stratified & 6 & 6 & 6 & 6 & 6 & 6 & 6 & 6 & 6 & 6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Why stratified.} The fleet size is the most important single decision of the design:
+it sets the fleet cost $Z$ directly and the coverage through the number of cameras. A uniform start
+already prefers some sizes before any design has been evaluated: with $N_{\max}=10$ it contains on
+average 0.6 designs with one spacecraft and 2.6 with two, but 14.8 with five, although \ac{SA} found
+two to four spacecraft to be best. The \ac{GA} would first have to reduce the fleet size step by step
+through switch flips. A stratified start gives every fleet size the same number of candidates, so
+that the comparison between fleet sizes is made by selection, on the fitness, and not by the
+sampling. It costs nothing: the orbits are drawn exactly as before.
+
+\paragraph{Feasibility of the start.} Every individual is drawn until it passes the pre-engine
+checks (radius band, duration and separation), at most 200 times, as \ac{SA}'s warm start does. A
+test on 200 random designs per fleet size showed that at least 93\,\% of them pass even with ten
+spacecraft (Eros, $T_{\max}$ from 6\,h to 10\,d), so the start is not biased towards small fleets by
+rejections.
+
+Both start types are compared in the parameter study.
+
+%=====================================================================================
+\section{Selection}
+\label{sec:ga-selection}
+
+Parents are chosen by tournament selection: $k$ individuals are drawn at random from the whole
+population (with replacement) and the best of them, compared feasible first and then by lower $J$,
+becomes a parent. The default is the binary tournament, $k=2$, with the selection probabilities of
+Eq.~(\ref{eq:tournament}). For crossover, the second parent is drawn again until it is a different
+individual from the first, since crossing a design with itself only produces a copy.
+
+Tournament selection is used instead of fitness-proportional (roulette-wheel) selection because of
+the scale of the cost: a feasible design has $J\in[0,1]$, while a design that fails a constraint
+costs at least $10^3$ (Eq.~\ref{eq:penalty}). Roulette selection needs positive fitness values on a
+meaningful scale and would have to transform this cost; a tournament only compares two designs,
+so it is unaffected by the scale and applies the feasibility-first rule of \ac{SA} exactly. Its
+selection pressure is set by $k$ alone: a larger $k$ favours the best designs more strongly and
+reduces the diversity faster; $k=2$, 3 and 5 are compared in the parameter study.
+
+%=====================================================================================
+\section{Population split: elites, crossover and mutation}
+\label{sec:ga-split}
+
+Each new generation is assembled from three groups (Figure~\ref{fig:split}):
+\begin{equation}
+n_e=\operatorname{round}(\varepsilon P),\qquad
+n_c=\operatorname{round}\bigl(\chi\,(P-n_e)\bigr),\qquad
+n_m=P-n_e-n_c,
+\label{eq:split}
+\end{equation}
+where $\varepsilon$ is the \emph{elite share} and $\chi$ the \emph{crossover fraction}. The defaults
+are $\varepsilon=5\,\%$ and $\chi=0.8$ (the same structure as the elite count and crossover
+fraction of MATLAB's \texttt{ga}); Table~\ref{tab:split} gives the resulting group sizes.
+
+\begin{itemize}
+  \item \textbf{Elites} ($n_e$): the $n_e$ best \emph{distinct} individuals (ranked feasible first, then by
+        lower $J$; an infeasible design costs more than any feasible one, Eq.~\ref{eq:penalty}) are copied unchanged. Their fitness is
+        already known, so they are not evaluated again.
+  \item \textbf{Crossover children} ($n_c$): two parents are chosen by tournament, their slots are
+        aligned, and a child is assembled from the slots of both
+        (Section~\ref{sec:ga-crossover}). If $n_c$ is odd, the last pair contributes one child.
+        A child identical to one of its parents is mutated, so that no evaluation is spent on a copy.
+  \item \textbf{Mutation children} ($n_m$): one parent is chosen by tournament, copied, and one or
+        two of its active genes are changed: a Gaussian step on $T$, $a_i$, $\iota_i$, $\Omega_i$
+        or $M_{0,i}$, or a flip of a switch $s_i$; the result is passed through \texttt{repair}.
+\end{itemize}
+Each generation therefore costs $n_c+n_m=P-n_e$ evaluations, as used in Eq.~(\ref{eq:generations}).
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    font=\sffamily,
+    op/.style={rounded corners=4pt, line width=0.9pt, text width=5.0cm, align=center,
+               inner sep=5pt, font=\sffamily\scriptsize},
+    arr/.style={-{Stealth[length=6pt]}, line width=0.9pt},
+  ]
+  % ---------------------------------------------------- generation g, ranked
+  \foreach \k in {1,...,40} {
+    \pgfmathtruncatemacro{\pct}{100-100*(\k-1)/39}
+    \pgfmathsetmacro{\y}{8.0-0.2*\k}
+    \fill[fill=sc2!\pct!offc!80] (0,\y) rectangle ++(1.0,0.2);
+    \draw[white, line width=0.3pt] (0,\y) -- ++(1.0,0);
+  }
+  \draw[gray!70!black, line width=0.8pt, rounded corners=2pt] (0,0) rectangle (1.0,8.0);
+  \draw[headc, line width=1.4pt, rounded corners=2pt] (-0.05,7.58) rectangle (1.05,8.05);
+  \node[font=\sffamily\small\bfseries, align=center] at (0.5,8.75) {Generation $g$};
+  \node[font=\sffamily\scriptsize, align=center] at (0.5,8.35) {$P=40$, ranked by $J$};
+  \node[font=\sffamily\scriptsize, anchor=east] at (-0.1,7.8) {best};
+  \node[font=\sffamily\scriptsize, anchor=east] at (-0.1,0.2) {worst};
+
+  % ---------------------------------------------------- the three operators
+  \node[op, draw=headc, fill=headc!8] (el) at (6.2,7.55)
+       {\textbf{Elitism}\\ copy the $n_e$ best distinct designs unchanged\\ (no new evaluation)};
+  \node[op, draw=sc1, fill=sc1!8] (cx) at (6.2,4.6)
+       {\textbf{Crossover}\\ tournament $\rightarrow$ 2 parents $\rightarrow$ align slots
+        $\rightarrow$ take each slot from parent A or B (or blend a matched pair)};
+  \node[op, draw=sc4, fill=sc4!8] (mu) at (6.2,1.4)
+       {\textbf{Mutation}\\ tournament $\rightarrow$ 1 parent $\rightarrow$ change 1--2 active genes
+        (Gaussian step or switch flip) $\rightarrow$ repair};
+
+  \draw[arr, headc] (1.05,7.8) -- (el.west);
+  \draw[arr, sc1] (1.05,4.6) -- node[above, font=\sffamily\scriptsize, text=black] {binary tournament} (cx.west);
+  \draw[arr, sc4] (1.05,1.4) -- node[above, font=\sffamily\scriptsize, text=black] {binary tournament} (mu.west);
+  \node[font=\sffamily\scriptsize, text=gray!40!black, align=center] at (2.3,3.0) {all $P$ individuals\\ can be parents};
+
+  % ---------------------------------------------------- generation g+1
+  \fill[fill=headc] (10.4,7.6) rectangle (11.4,8.0);
+  \fill[fill=sc1!70] (10.4,1.6) rectangle (11.4,7.6);
+  \fill[fill=sc4!70] (10.4,0) rectangle (11.4,1.6);
+  \foreach \k in {1,...,39} { \draw[white, line width=0.3pt] (10.4,{0.2*\k}) -- ++(1.0,0); }
+  \draw[gray!70!black, line width=0.8pt, rounded corners=2pt] (10.4,0) rectangle (11.4,8.0);
+  \node[font=\sffamily\small\bfseries] at (10.9,8.75) {Generation $g+1$};
+  \node[font=\sffamily\scriptsize] at (10.9,8.35) {$P=40$};
+
+  \draw[arr, headc] (el.east) -- (10.35,7.8);
+  \draw[arr, sc1] (cx.east) -- (10.35,4.6);
+  \draw[arr, sc4] (mu.east) -- (10.35,0.8);
+
+  \node[font=\sffamily\scriptsize, anchor=west, align=left] at (11.55,7.8) {$n_e=2$ elites};
+  \node[font=\sffamily\scriptsize, anchor=west, align=left] at (11.55,4.6) {$n_c=30$\\ crossover children};
+  \node[font=\sffamily\scriptsize, anchor=west, align=left] at (11.55,0.8) {$n_m=8$\\ mutation children};
+  \draw[decorate, decoration={brace, amplitude=5pt}, line width=0.7pt, gray!70!black] (13.9,7.55) -- (13.9,0)
+       node[midway, right=7pt, font=\sffamily\scriptsize, align=left] {$P-n_e=38$\\ new evaluations\\ per generation};
+\end{tikzpicture}%
+}
+\caption{Assembly of a new generation ($P=40$, defaults $\varepsilon=5\,\%$, $\chi=0.8$). The two
+best designs survive unchanged; every other place is filled by a new child, bred from parents
+chosen by binary tournament among \emph{all} $P$ individuals.}
+\label{fig:split}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{Group sizes of Eq.~(\ref{eq:split}) for the default $\varepsilon=5\,\%$, $\chi=0.8$, and the
+number of generations $G$ (Eq.~\ref{eq:generations}) for $B=2000$.}
+\label{tab:split}
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+ & $P$ & elites $n_e$ & crossover $n_c$ & mutation $n_m$ & evaluations / generation & $G$ \\
+\midrule
+$N_{\max}=5$  & 40 & 2 & 30 & 8  & 38 & 53 \\
+$N_{\max}=10$ & 60 & 3 & 46 & 11 & 57 & 36 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Elites are not the only parents.} Elitism decides which designs \emph{survive}
+unchanged; selection decides which designs \emph{reproduce}, and every individual can be chosen.
+In a binary tournament two individuals are drawn at random (with replacement) and the better one
+wins, so the individual of rank $r$ (1 = best) wins a tournament with probability
+\begin{equation}
+\Pr(r)=\frac{2(P-r)+1}{P^2}.
+\label{eq:tournament}
+\end{equation}
+With the $P-n_e=38$ tournaments of a generation of $P=40$, about 22 different individuals (56\,\%)
+become parents. The best design is chosen 1.9 times on average, rank~10 1.5 times, rank~20 once,
+rank~30 0.5 times and the worst almost never; three quarters of all parent choices fall on the
+better half (Table~\ref{tab:tournament}). Good genes therefore spread through selection; the
+elites only have to make sure that the best design itself is never lost.
+
+\begin{table}[htbp]
+\centering
+\caption{Expected number of times an individual of rank $r$ is chosen as a parent in one
+generation, $(P-n_e)\Pr(r)$ with Eq.~(\ref{eq:tournament}), for $P=40$, $n_e=2$.}
+\label{tab:tournament}
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+rank $r$ & 1 & 2 & 5 & 10 & 20 & 30 & 40 \\
+\midrule
+expected choices & 1.88 & 1.83 & 1.69 & 1.45 & 0.97 & 0.50 & 0.02 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Why a small elite share.} One elite already guarantees that the best fitness never
+gets worse, so the best-so-far curve of the \ac{GA} is monotone like that of \ac{SA}; a second
+elite protects a second, different design, often one with another fleet size. More elites have
+two costs: every elite place is one new design fewer per generation, and the elites, which
+survive every generation \emph{and} are chosen as parents about twice each, quickly fill the
+population with copies and near-copies of a few fleets (premature convergence). This matters here
+because many designs are almost equally good: the forced-fleet-size study (validation V6) showed
+that $J$ changes little between two, three and four spacecraft, and a small elite share keeps these
+alternatives in competition.
+
+\paragraph{Why separate crossover and mutation groups.} Each operator has one job. Crossover
+\emph{combines} what the population already holds: a child can inherit a good polar orbit from one
+parent and a good equatorial orbit from the other, a combination that \ac{SA} can only reach step
+by step. Because whole slots are inherited, their simulations are already in the engine's cache and
+a crossover child is cheap to evaluate. Slot crossover cannot, however, create an orbit radius or an
+inclination that no parent has, and it changes the fleet size only by recombining switches;
+mutation \emph{creates} new gene values and switches spacecraft on and off. The mutation children
+make the same 1--2-gene move as \ac{SA}'s neighbour function, so they can be read as \ac{SA}-like
+local steps and the crossover children as what the \ac{GA} adds on top. Keeping the groups separate
+also lets every new best design be traced to the operator that produced it.
+
+\paragraph{Parameters to be studied.} Both shares are treated as parameters and varied one at a
+time at the same budget (Table~\ref{tab:split-study}). The elite share is expected to show a
+U-shape: without elites the best design can be lost, with many elites the population converges
+early. A crossover fraction of 1 removes the mutation group, so no new gene values can appear after
+the first generation; a fraction of 0 leaves only mutation, which turns the \ac{GA} into many
+\ac{SA}-like moves in parallel without a temperature.
+
+\begin{table}[htbp]
+\centering
+\caption{Values of the elite share and the crossover fraction tested in the parameter study
+(one parameter changed at a time; default in bold).}
+\label{tab:split-study}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+elite share $\varepsilon$ & 0 & 2.5\,\% & \textbf{5\,\%} & 10\,\% & 20\,\% \\
+\quad elites $n_e$ for $P=40$ & 0 & 1 & \textbf{2} & 4 & 8 \\
+\quad elites $n_e$ for $P=60$ & 0 & 2 & \textbf{3} & 6 & 12 \\
+\quad generations $G$ for $P=40$ & 50 & 52 & \textbf{53} & 56 & 63 \\
+\midrule
+crossover fraction $\chi$ & 0 & 0.6 & \textbf{0.8} & 0.95 & 1.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%=====================================================================================
+\section{Crossover}
+\label{sec:ga-crossover}
+
+Crossover builds two children from two parents chosen by tournament. It works on whole slots,
+in three steps: the slots of the second parent are \emph{aligned} to those of the first, each
+aligned pair is then either \emph{swapped} or \emph{blended}, and the children are repaired
+(Algorithm~\ref{alg:crossover}, Figure~\ref{fig:crossover}).
+
+\subsection{Step 1: slot alignment}
+The slots carry no identity: a fleet with orbits $(\mathcal{O}_1,\mathcal{O}_2,\mathcal{O}_3)$ in
+slots 1--3 is the same mission as one with the orbits in slots 3, 1, 2. With $N_{\max}=5$ every
+fleet can be written in up to $5!=120$ slot orders. Combining slot $i$ of one parent with slot $i$
+of the other therefore usually pairs two \emph{unrelated} orbits: a child may receive the same
+orbit twice (which then violates the separation constraint g3) or lose the orbits that made both
+parents good. Before crossover, the slots of parent B are therefore reordered so that each slot of
+parent A faces the most similar slot of B. The distance between two slots is
+\begin{equation}
+d(\mathbf{y}^A_i,\mathbf{y}^B_j)=\frac{|a^A_i-a^B_j|}{r_{\max}-r_{\min}}
++\frac{|\iota^A_i-\iota^B_j|}{180^\circ}
++\frac{\delta(\Omega^A_i,\Omega^B_j)}{180^\circ}
++\frac{\delta(M^A_{0,i},M^B_{0,j})}{180^\circ},
+\qquad
+\delta(\theta,\phi)=\min\bigl(|\theta-\phi|\bmod 360^\circ,\;360^\circ-|\theta-\phi|\bmod 360^\circ\bigr),
+\label{eq:slotdist}
+\end{equation}
+where $\delta$ is the angle between two directions, so that $350^\circ$ and $10^\circ$ are
+$20^\circ$ apart and not $340^\circ$. The pairs are matched greedily: flying slots of A with flying
+slots of B first, closest pair first; then the remaining flying slots with switched-off ones;
+finally the switched-off slots with each other. For $N_{\max}\le10$ this costs at most 100 distance
+evaluations, nothing compared with one mission simulation, and needs no optimisation package.
+
+\subsection{Step 2: swap or blend each aligned pair}
+Each aligned pair of slots is treated in one of two ways:
+\begin{itemize}
+  \item \textbf{Swap} (probability $1-p_b$): child 1 takes the whole slot from one parent, chosen
+        with probability $\tfrac12$, and child 2 from the other. The orbit is inherited intact,
+        with its radius, inclination, node, phase and switch.
+  \item \textbf{Blend} (probability $p_b$, only if \emph{both} slots fly): the orbit genes are
+        interpolated with a weight $\lambda\sim U(-\alpha_b,\,1+\alpha_b)$ drawn per gene
+        (blend crossover BLX-$\alpha$),
+        \begin{equation}
+        g^{(1)}=g^A+\lambda\,(g^B-g^A),\qquad g^{(2)}=g^B+\lambda\,(g^A-g^B),
+        \qquad g\in\{a,\iota\},
+        \label{eq:blx}
+        \end{equation}
+        and the angles along the shorter arc,
+        \begin{equation}
+        \Delta=\bigl((\theta^B-\theta^A+180^\circ)\bmod360^\circ\bigr)-180^\circ,\qquad
+        \theta^{(1)}=(\theta^A+\lambda\Delta)\bmod360^\circ,\qquad \theta\in\{\Omega,M_0\}.
+        \label{eq:arc}
+        \end{equation}
+        Both children keep the switch on.
+\end{itemize}
+The mission duration $T$ is treated like a slot: swapped with probability $1-p_b$, otherwise
+blended with Eq.~(\ref{eq:blx}). A pair in which only one slot flies is always swapped, because an
+average of an orbit that flies and one that does not has no meaning; the swap passes the flying
+orbit to one child and the dormant one to the other, which is how crossover changes the fleet size.
+Finally both children are passed through \texttt{repair} (reflection of $a$, $\iota$ and $T$ at
+their bounds, which BLX-$\alpha$ can exceed, and wrapping of the angles), and a child identical to a
+parent is mutated.
+
+\paragraph{Why the angles need Eq.~(\ref{eq:arc}).} The plain average of $350^\circ$ and $10^\circ$
+is $180^\circ$, the opposite direction, although the two nodes are only $20^\circ$ apart; the
+shorter-arc rule gives $0^\circ$. Without it, two nearly identical orbits would produce a child on
+the other side of the asteroid.
+
+\paragraph{Why a random weight.} With the fixed weight $\lambda=\tfrac12$ (the midpoint of the two
+parents) every blended gene lies strictly between its parents, and without selection the spread
+of a gene in the population is halved each generation. After about five generations the
+population would be confined to roughly $1/30$ of its initial spread, long before the end of the
+run. With $\lambda\sim U(-\alpha_b,1+\alpha_b)$ a child can also land slightly beyond either
+parent, which keeps the spread of the population; $\alpha_b=0.3$ is used.
+
+\subsection{Choice of the blend probability}
+Swapping and blending have different roles. Swapping \emph{recombines} complete orbits that have
+already proved good: an orbit is good as a whole (radius, inclination and node together), and its
+simulation is already in the engine's cache, so a swapped slot costs no new simulation. Blending
+\emph{refines}: it creates an orbit between two matched good orbits, e.g.\ a radius of 57\,km between
+parents at 55 and 60\,km, which swapping can never produce; each blended orbit is a new orbit to
+simulate. Swapping should therefore dominate, with enough blending to keep refining the orbits.
+
+A crossover child has about $N\approx3$ matched flying pairs (\ac{SA} chose two to four
+spacecraft), so it contains on average $p_bN$ new orbits (Table~\ref{tab:pblend}). The default
+$p_b=0.3\approx1/N$ gives about \emph{one} new orbit per child, which matches the mutation rate
+(about one changed gene per child) and the cost of one \ac{SA} move (one changed orbit, one new
+simulation), so that \ac{GA} and \ac{SA} also spend similar computing time per evaluation.
+The blend probability is a parameter of the study, and the best value found there replaces this
+default.
+
+\begin{table}[htbp]
+\centering
+\caption{Effect of the blend probability $p_b$ on a crossover child with $N=3$ matched flying pairs.
+The values marked $\star$ are tested in the parameter study, together with the fixed weight
+$\lambda=\tfrac12$ and with the alignment switched off.}
+\label{tab:pblend}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+$p_b$ & $0^\star$ & $\mathbf{0.3}^\star$ & $0.5^\star$ & $1^\star$ \\
+\midrule
+new (blended) orbits per child, $p_bN$ & 0 & \textbf{0.9} & 1.5 & 3 \\
+children without a new orbit, $(1-p_b)^N$ & 100\,\% & \textbf{34\,\%} & 12.5\,\% & 0\,\% \\
+expected behaviour & \multicolumn{1}{>{\centering\arraybackslash}p{2.4cm}}{no refinement; only mutation improves an orbit}
+ & \multicolumn{1}{>{\centering\arraybackslash}p{2.4cm}}{recombination and refinement}
+ & \multicolumn{1}{>{\centering\arraybackslash}p{2.4cm}}{more refinement, more simulations}
+ & \multicolumn{1}{>{\centering\arraybackslash}p{2.4cm}}{every orbit new; population contracts} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{algorithm}[htbp]
+\caption{Slot crossover of two parents}
+\label{alg:crossover}
+\begin{algorithmic}[1]
+\REQUIRE parents $\mathbf{x}^A,\mathbf{x}^B$; blend probability $p_b=0.3$; $\alpha_b=0.3$
+\STATE \textbf{Align:} reorder the slots of $\mathbf{x}^B$ by greedy matching with Eq.~(\ref{eq:slotdist}) (flying--flying first)
+\STATE $\mathbf{c}^{(1)}\leftarrow\mathbf{x}^A$; \quad $\mathbf{c}^{(2)}\leftarrow\mathbf{x}^B$ (aligned)
+\FOR{each gene group $k\in\{T,\ \text{slot }1,\dots,\text{slot }N_{\max}\}$}
+  \IF{$\mathrm{rand}()<p_b$ \textbf{and} group $k$ is $T$ or flies in both parents}
+    \STATE \textbf{Blend:} $a,\iota,T$ with Eq.~(\ref{eq:blx}); $\Omega,M_0$ with Eq.~(\ref{eq:arc}); $\lambda\sim U(-\alpha_b,1+\alpha_b)$ per gene
+  \ELSIF{$\mathrm{rand}()<\tfrac12$}
+    \STATE \textbf{Swap:} exchange group $k$ between $\mathbf{c}^{(1)}$ and $\mathbf{c}^{(2)}$ (whole slot, switch included)
+  \ENDIF
+\ENDFOR
+\STATE $\mathbf{c}^{(1)},\mathbf{c}^{(2)}\leftarrow\textsc{Repair}(\mathbf{c}^{(1)}),\textsc{Repair}(\mathbf{c}^{(2)})$
+\STATE mutate any child that equals one of its parents
+\RETURN $\mathbf{c}^{(1)},\mathbf{c}^{(2)}$
+\end{algorithmic}
+\end{algorithm}
+
+\newcommand{\gaslot}[5]{% x, y, colour, line 1, line 2
+  \filldraw[fill=#3!18, draw=#3!80!black, line width=0.8pt, rounded corners=3pt] (#1,#2) rectangle ++(2.3,0.8);
+  \node[font=\sffamily\scriptsize, align=center] at ({#1+1.15},{#2+0.4}) {#4\\[-2pt]#5};}
+\newcommand{\gaoff}[2]{% x, y
+  \filldraw[fill=offc!10, draw=offc, dashed, line width=0.8pt, rounded corners=3pt] (#1,#2) rectangle ++(2.3,0.8);
+  \node[font=\sffamily\scriptsize, text=gray] at ({#1+1.15},{#2+0.4}) {off (dormant)};}
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[font=\sffamily, arr/.style={-{Stealth[length=5pt]}, line width=0.7pt}]
+  % column x positions: 1.9, 4.5, 7.1, 9.7, 12.3
+  \foreach \c in {1,...,5} { \node[font=\sffamily\scriptsize\bfseries, text=gray!60!black] at ({1.9+2.6*(\c-1)+1.15},7.55) {slot \c}; }
+
+  % parent B as stored
+  \node[font=\sffamily\small\bfseries, anchor=east, text=sc4!80!black] at (1.75,6.8) {Parent B (stored)};
+  \gaslot{1.9}{6.4}{sc4}{41\,km\enspace$140^\circ$}{$\Omega=210^\circ$}
+  \gaoff{4.5}{6.4}
+  \gaslot{7.1}{6.4}{sc4}{52\,km\enspace$35^\circ$}{$\Omega=10^\circ$}
+  \gaslot{9.7}{6.4}{sc4}{60\,km\enspace$90^\circ$}{$\Omega=130^\circ$}
+  \gaoff{12.3}{6.4}
+
+  % alignment: stored slot j -> aligned position i  (B3->1, B4->2, B1->3, B2->4, B5->5)
+  \foreach \j/\i in {3/1, 4/2, 1/3, 2/4, 5/5} {
+    \draw[arr, gray!70!black] ({1.9+2.6*(\j-1)+1.15},6.35) -- ({1.9+2.6*(\i-1)+1.15},5.25);
+  }
+  \node[font=\sffamily\scriptsize, fill=white, inner sep=1pt, text=gray!40!black, anchor=west] at (14.8,5.8) {\textbf{1. align}: nearest orbit, Eq.~(\ref{eq:slotdist})};
+
+  % parent B aligned + parent A, stacked so matched pairs read as columns
+  \node[font=\sffamily\small\bfseries, anchor=east, text=sc4!80!black] at (1.75,4.8) {Parent B (aligned)};
+  \gaslot{1.9}{4.4}{sc4}{52\,km\enspace$35^\circ$}{$\Omega=10^\circ$}
+  \gaslot{4.5}{4.4}{sc4}{60\,km\enspace$90^\circ$}{$\Omega=130^\circ$}
+  \gaslot{7.1}{4.4}{sc4}{41\,km\enspace$140^\circ$}{$\Omega=210^\circ$}
+  \gaoff{9.7}{4.4}
+  \gaoff{12.3}{4.4}
+
+  \node[font=\sffamily\small\bfseries, anchor=east, text=sc1!80!black] at (1.75,3.7) {Parent A};
+  \gaslot{1.9}{3.3}{sc1}{50\,km\enspace$30^\circ$}{$\Omega=350^\circ$}
+  \gaslot{4.5}{3.3}{sc1}{62\,km\enspace$95^\circ$}{$\Omega=120^\circ$}
+  \gaslot{7.1}{3.3}{sc1}{40\,km\enspace$150^\circ$}{$\Omega=200^\circ$}
+  \gaoff{9.7}{3.3}
+  \gaoff{12.3}{3.3}
+
+  % 2. swap or blend
+  \foreach \c/\how in {1/blend $\lambda=\frac12$, 2/swap: from B, 3/swap: from A, 4/swap: from A, 5/swap: from B} {
+    \draw[arr, gray!70!black] ({1.9+2.6*(\c-1)+1.15},3.25) -- ({1.9+2.6*(\c-1)+1.15},1.85)
+        node[midway, fill=white, inner sep=1.5pt, font=\sffamily\scriptsize] {\how};
+  }
+  \node[font=\sffamily\scriptsize, fill=white, inner sep=1pt, text=gray!40!black, anchor=west] at (14.8,2.55) {\textbf{2. swap or blend} each pair};
+
+  % child
+  \node[font=\sffamily\small\bfseries, anchor=east] at (1.75,1.4) {Child};
+  \gaslot{1.9}{1.0}{sc1!50!sc4}{51\,km\enspace$33^\circ$}{$\Omega=0^\circ$ (not $180^\circ$)}
+  \gaslot{4.5}{1.0}{sc4}{60\,km\enspace$90^\circ$}{$\Omega=130^\circ$}
+  \gaslot{7.1}{1.0}{sc1}{40\,km\enspace$150^\circ$}{$\Omega=200^\circ$}
+  \gaoff{9.7}{1.0}
+  \gaoff{12.3}{1.0}
+  \node[font=\sffamily\scriptsize, anchor=west, align=left] at (14.75,1.4) {$N=3$; slots 2, 3 reuse\\cached simulations};
+\end{tikzpicture}%
+}
+\caption{Slot crossover of two 3-spacecraft parents ($N_{\max}=5$; the duration $T$ is left out
+for clarity). Parent B stores its orbits in a different slot order; without alignment, slot~1 of A
+(50\,km, $30^\circ$) would be paired with slot~1 of B (41\,km, $140^\circ$), an unrelated orbit.
+After alignment each column holds two similar orbits. Here the first pair is blended (the nodes
+$350^\circ$ and $10^\circ$ give $0^\circ$ along the shorter arc) and the others are swapped. Blue:
+from A; orange: from B; mixed: blended; grey: switched off.}
+\label{fig:crossover}
+\end{figure}
+
+%=====================================================================================
+\section{Mutation}
+\label{sec:ga-mutation}
+
+A mutation child is a copy of a parent in which one or two genes, chosen at random among the
+\emph{active} genes (Section~\ref{sec:ga-chromosome}), are changed:
+\begin{itemize}
+  \item a real gene $g_j$ ($T$, $a_i$, $\iota_i$, $\Omega_i$ or $M_{0,i}$ of a flying spacecraft)
+        receives a Gaussian step proportional to its range,
+        \begin{equation}
+        g_j\leftarrow g_j+\mathcal{N}\!\bigl(0,\;(\sigma_g\,(u_j-l_j))^2\bigr);
+        \label{eq:mutation}
+        \end{equation}
+  \item a switch $s_i$ is flipped, which adds or removes a spacecraft. A slot that is switched on
+        flies the dormant orbit it carries.
+\end{itemize}
+The child is then repaired. If repair maps it back onto the parent, or widens the change (switching
+off the last spacecraft makes repair switch another one on), the mutation is drawn again. This is
+the same move as the neighbour function of \ac{SA} (Section~\ref{sec:sa-problem}), so the mutation
+children are \ac{SA}-like local steps.
+
+The step size $\sigma_g$ used to breed generation $g+1$ from generation $g$ shrinks geometrically,
+$g=0,\dots,G-2$,
+\begin{equation}
+\sigma_g=\sigma_0\Bigl(\frac{\sigma_{\min}}{\sigma_0}\Bigr)^{g/(G-2)},\qquad
+\sigma_0=0.25,\quad \sigma_{\min}=0.01,
+\label{eq:sigma}
+\end{equation}
+from a quarter of each variable's range (large jumps, exploration) to one percent (fine
+adjustment). In \ac{SA} the step falls as $\sigma_0\sqrt{\Theta/\Theta_0}$ and the temperature falls
+geometrically, so its step also shrinks geometrically from 0.25 to about 0.01; Eq.~(\ref{eq:sigma})
+gives the \ac{GA} the same schedule, measured in generations instead of temperature levels.
+
+\paragraph{Why only active genes.} A change to a dormant gene does not alter the fitness, so it
+would cost an evaluation for nothing. Since every switch is an active gene, a switch is changed in
+about $N_{\max}/(1+N_{\max}+4N)$ of the gene choices (5 of 18 for $N=3$, $N_{\max}=5$), so the
+fleet size is mutated regularly.
+
+\paragraph{Why one or two genes.} A mutation child should stay close to its parent, a good design,
+so that the change can be judged: the effect of changing many genes at once is close to that of a
+random design. Changing one or two genes matches \ac{SA}'s move and, with the crossover children
+carrying about one new orbit each (Section~\ref{sec:ga-crossover}), keeps the cost of the
+\ac{GA} per evaluation close to that of \ac{SA}.
+
+%=====================================================================================
+\section{Constraints, duplicates and termination}
+\label{sec:ga-other}
+
+\paragraph{Constraints.} Every child is evaluated through the same pipeline as in \ac{SA}: a
+design that fails a pre-engine check (e.g.\ two spacecraft brought closer than $d_{\mathrm{sep}}$
+by crossover) is not simulated and receives the penalised cost of Eq.~(\ref{eq:penalty}). Such a
+child stays in the population: it loses every tournament against a feasible design, but among
+infeasible designs the smaller violation wins, so the search is led back to the feasible region.
+The separation and battery constraints cannot be repaired by moving genes into their bounds and are
+handled by this penalty only.
+
+\paragraph{Duplicates.} The elites are distinct designs, and a child identical to one of its
+parents or to a child already created in the same generation is mutated again, so that no
+evaluation is spent on a design whose fitness is known.
+
+\paragraph{Termination.} The run stops when the evaluation budget $B$ is used, as for \ac{SA}; the
+last generation may be incomplete. No stall criterion is used, so both algorithms always spend the
+same number of evaluations. The result is the best design evaluated during the whole run.
+
+%=====================================================================================
+\section{One algorithm for the fleet and for benchmark functions}
+\label{sec:ga-generic}
+
+The \ac{GA} is validated, like \ac{SA}, on benchmark functions with a known optimum (validation V2).
+These functions have no slots and no switches, so the problem-specific operators are attached to
+an optional part of the \texttt{Problem} interface: the fleet pipeline reports which genes form each
+slot (\texttt{slot\_groups}) and which genes are switches. A problem without this information is
+treated with every gene as its own group: alignment is skipped, the slot swap becomes the standard
+uniform crossover, the blend becomes the standard BLX-$\alpha$, and mutation changes one or two
+genes. The same code therefore runs on both kinds of problem, and the benchmark results test the
+\ac{GA} machinery (selection, elitism, crossover, mutation, budget) independently of the spacecraft
+model.
+
+%=====================================================================================
+\section{The complete algorithm}
+\label{sec:ga-algorithm}
+
+Algorithm~\ref{alg:ga} and Figure~\ref{fig:gaflow} summarise the complete \ac{GA};
+Table~\ref{tab:gaparams} lists its parameters.
+
+\begin{algorithm}[htbp]
+\caption{Genetic Algorithm for the fleet design}
+\label{alg:ga}
+\begin{algorithmic}[1]
+\REQUIRE budget $B$; $P$ (Eq.~\ref{eq:popsize}); $\varepsilon$, $\chi$ (Eq.~\ref{eq:split}); $p_b$, $\alpha_b$; $k$; $\sigma_0$, $\sigma_{\min}$
+\STATE \textbf{Start:} draw $P$ designs stratified over $N=1,\dots,N_{\max}$, each passing the pre-engine checks
+\STATE evaluate them (Feasibility $\rightarrow$ Engine); $\mathbf{x}^{*}\leftarrow$ the best; $g\leftarrow0$
+\STATE $n_e,n_c,n_m\leftarrow$ Eq.~(\ref{eq:split}); \quad $G\leftarrow$ Eq.~(\ref{eq:generations})
+\WHILE{the budget is not used}
+  \STATE $\sigma_g\leftarrow$ Eq.~(\ref{eq:sigma}); \quad $\mathcal{E}\leftarrow$ the $n_e$ best distinct designs \hfill (elitism)
+  \STATE $\mathcal{C}\leftarrow\emptyset$
+  \WHILE{$|\mathcal{C}|<n_c$}
+    \STATE $\mathbf{x}^A,\mathbf{x}^B\leftarrow$ two different tournament winners
+    \STATE add the children of \textsc{Crossover}$(\mathbf{x}^A,\mathbf{x}^B)$ (Algorithm~\ref{alg:crossover}) to $\mathcal{C}$
+  \ENDWHILE
+  \FOR{$n_m$ times}
+    \STATE add \textsc{Repair}(\textsc{Mutate}(tournament winner, $\sigma_g$)) to $\mathcal{C}$ \hfill (1--2 active genes)
+  \ENDFOR
+  \STATE mutate again every child that duplicates a parent or another child
+  \STATE evaluate the children until the budget is used; update $\mathbf{x}^{*}$ (feasible first, then lower $J$)
+  \STATE population $\leftarrow\mathcal{E}\cup\mathcal{C}$; \quad $g\leftarrow g+1$
+\ENDWHILE
+\RETURN $\mathbf{x}^{*}$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    font=\sffamily\small, node distance=0.45cm,
+    box/.style={draw=#1, fill=#1!8, line width=0.9pt, rounded corners=4pt, text width=7.2cm,
+                align=center, inner sep=5pt},
+    box/.default=sc1,
+    arr/.style={-{Stealth[length=6pt]}, line width=0.9pt, gray!70!black},
+  ]
+  \node[draw=headc, fill=headc, text=white, rounded corners=10pt, inner sep=6pt] (start) {Start};
+  \node[box=headc, below=of start] (init) {\textbf{Initial population}: $P$ designs, stratified over the
+        fleet size $N$, each passing the pre-engine checks};
+  \node[box=headc, below=of init] (eval0) {\textbf{Evaluate} all $P$: Feasibility $\rightarrow$ Engine $\rightarrow J$};
+  \node[diamond, aspect=2.6, draw=gray!70!black, fill=gray!8, line width=0.9pt, inner sep=1pt,
+        below=of eval0] (dec) {budget left?};
+  \node[box=headc, below=of dec] (elite) {\textbf{Elitism}: keep the $n_e$ best distinct designs};
+  \node[box=sc1, below=of elite] (cross) {\textbf{Crossover} ($n_c$ children): tournament $\rightarrow$ 2 parents
+        $\rightarrow$ align slots $\rightarrow$ swap or blend each pair};
+  \node[box=sc4, below=of cross] (mut) {\textbf{Mutation} ($n_m$ children): tournament $\rightarrow$ 1 parent
+        $\rightarrow$ change 1--2 active genes with step $\sigma_g$};
+  \node[box=gray, below=of mut] (rep) {\textbf{Repair}, remove duplicates, \textbf{evaluate} the
+        $P-n_e$ children; update the best design};
+  \node[box=gray, below=of rep] (next) {next generation $=$ elites $+$ children; \ $g\leftarrow g+1$,
+        shrink $\sigma_g$};
+  \node[draw=headc, fill=headc, text=white, rounded corners=10pt, inner sep=6pt, align=center,
+        right=1.6cm of dec] (stop) {return the best design\\ (feasible first, lowest $J$)};
+
+  \draw[arr] (start) -- (init);
+  \draw[arr] (init) -- (eval0);
+  \draw[arr] (eval0) -- (dec);
+  \draw[arr] (dec) -- node[right, font=\sffamily\scriptsize] {yes} (elite);
+  \draw[arr] (elite) -- (cross);
+  \draw[arr] (cross) -- (mut);
+  \draw[arr] (mut) -- (rep);
+  \draw[arr] (rep) -- (next);
+  \draw[arr] (dec) -- node[above, font=\sffamily\scriptsize] {no} (stop);
+  \draw[arr] (next.west) -- ++(-0.6,0) |- (dec.west);
+\end{tikzpicture}
+\caption{Flowchart of the Genetic Algorithm. Every evaluation passes through the same
+Feasibility $\rightarrow$ Engine pipeline as \ac{SA}.}
+\label{fig:gaflow}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{Parameters of the \ac{GA}: default values and the values compared in the parameter study
+(one parameter changed at a time; the best value of each becomes the default).}
+\label{tab:gaparams}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}Xccl@{}}
+\toprule
+Parameter & Symbol & Default & Values in the study \\
+\midrule
+Evaluation budget (per run) & $B$ & 2000 & --- (same as \ac{SA}) \\
+Population size & $P$ & 40 / 60 (Eq.~\ref{eq:popsize}) & 10, 20, 40, 80, 120 \\
+Initial population & --- & stratified & stratified, uniform \\
+Elite share & $\varepsilon$ & 5\,\% & 0, 2.5, 5, 10, 20\,\% \\
+Crossover fraction & $\chi$ & 0.8 & 0, 0.6, 0.8, 0.95, 1 \\
+Tournament size & $k$ & 2 & 2, 3, 5 \\
+Slot alignment & --- & on & on, off \\
+Blend probability & $p_b$ & 0.3 & 0, 0.3, 0.5, 1 \\
+Blend weight & $\lambda$ & $U(-\alpha_b,1+\alpha_b)$, $\alpha_b=0.3$ & random, fixed $\tfrac12$ \\
+Genes changed per mutation & --- & 1 or 2 & --- (same as \ac{SA}) \\
+Initial / final mutation step (fraction of range) & $\sigma_0$ / $\sigma_{\min}$ & 0.25 / 0.01 & $\sigma_0=0.1$, 0.25, 0.5 \\
+Engine cache (orbits) & --- & 1024 & --- (does not change results) \\
+\bottomrule
+\end{tabularx}
+\end{table}

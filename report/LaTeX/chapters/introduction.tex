@@ -1,0 +1,53 @@
+\chapter{Introduction}
+\label{ch:intro}
+
+Asteroids are leftovers from the formation of the Solar System. Before a spacecraft can land on
+one or take a sample, scientists need a detailed photographic map of its surface. Most small
+bodies are irregular, non-convex shapes whose ridges and craters hide parts of the surface from
+view, and mapping them takes a long time: NEAR Shoemaker, the only spacecraft that ever orbited
+433~Eros, spent about a year lowering its orbit step by step to map the body with a single
+camera~\cite{dunham2002}.
+
+This project asks how a small fleet of \emph{cooperating} spacecraft should be designed so that
+together they photograph as much of an irregular body as possible, without spending more
+spacecraft, energy or mission time than needed. Milestone~2 reviewed the literature and
+formulated the problem. This milestone (Milestone~3) implements \acf{SA} for it, applies it to
+case studies of increasing size and difficulty, and validates the results.
+
+\section{Objectives}
+The objectives of this milestone, following the project brief, are:
+\begin{enumerate}
+\item Finalise the problem formulation (problem statement, decision variables, constraints and
+fitness) and implement it as a modular simulation pipeline (Chapters~\ref{ch:method}
+and~\ref{ch:orbital}).
+\item Implement \ac{SA} for the problem, including its problem-specific neighbourhood and repair
+operators, and visualise the search and the resulting solutions (Chapter~\ref{ch:sa}).
+\item Define case studies of varying size and complexity and their input parameters
+(Chapter~\ref{ch:cases}).
+\item Validate the algorithm on benchmark problems with known optima, against random search,
+against results from the literature, and with independent checks of its decisions
+(Chapter~\ref{ch:validation}).
+\item Report and discuss the results of every case study, and analyse the performance of the
+algorithm and the effect of its parameters (Chapter~\ref{ch:results}).
+\end{enumerate}
+
+\section{What changed since Milestone 2}
+\begin{itemize}
+\item Only the orbital layer is optimised. Orbits are circular (eccentricity and argument of
+periapsis removed) and every spacecraft carries the same narrow camera (scanner type removed).
+\item The mission duration $T$ is a decision variable that is minimised, instead of a fixed three
+days, and the number of spacecraft $N$ is decided by the optimiser through one on/off switch per
+spacecraft slot.
+\item The model now includes sunlight with cast shadows, eclipses and a battery constraint, and the
+objectives are coverage, fleet cost, energy and mission time.
+\item The method was extended to a second, very different body, 216~Kleopatra.
+\end{itemize}
+
+\section{Report outline}
+Chapter~\ref{ch:background} summarises the literature reviewed in Milestone~2.
+Chapter~\ref{ch:method} gives the final problem formulation and Chapter~\ref{ch:orbital} the
+simulation that evaluates it. Chapter~\ref{ch:sa} explains the \ac{SA} implementation,
+Chapter~\ref{ch:cases} the case studies, Chapter~\ref{ch:validation} the validation and
+Chapter~\ref{ch:results} the results and the analysis of the algorithm.
+Chapters~\ref{ch:conclusion} and~\ref{ch:future} conclude and outline the next milestones.
+Appendix~\ref{app:code} explains how to run the code.

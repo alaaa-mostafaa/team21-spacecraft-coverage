@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Launcher - run from the project folder:
+#   ./sim                         open the viewer on the example design
+#   ./sim path/to/scenario.json   open the viewer on any scenario
+#   ./sim eval <scenario.json>    print cost and constraints only, no window
+#   ./sim optimise <scenario.json> [--algorithm sa --evals 3000 --seed 1 --n-max 7 --save best.json]
+#   ./sim validate [--quick]      validation (Milestone 3 method) of the current formulation -> results/validation/
+#   ./sim experiments [--quick]   Milestone 3 experiments (legacy, frozen) -> results/
+#   ./sim test                    run the test suite
+# The first run creates .venv and installs requirements.txt automatically.
+set -e
+cd "$(dirname "$0")"
+PY=.venv/bin/python
+[ -x "$PY" ] || PY=.venv/Scripts/python.exe
+
+if [ ! -x "$PY" ]; then
+    echo "Setting up .venv (first run only) ..."
+    python3 -m venv .venv
+    PY=.venv/bin/python
+    "$PY" -m pip install -q -r requirements.txt
+fi
+
+case "${1:-}" in
+    "")          exec "$PY" -m viz scenarios/orbital_example.json ;;
+    eval)        shift; exec "$PY" -m spacecov "${@:-scenarios/orbital_example.json}" ;;
+    optimise)    shift; exec "$PY" -m spacecov "$@" --optimise ;;
+    validate)    shift; exec "$PY" experiments/validate.py "$@" ;;
+    experiments) shift; exec "$PY" -m spacecov.legacy.m3.experiments.run_experiments "$@" ;;
+    test)        shift; exec "$PY" -m pytest -q "$@" ;;
+    -h|--help)   sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' ;;
+    *)           exec "$PY" -m viz "$@" ;;
+esac

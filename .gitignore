@@ -1,0 +1,29 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# decimated meshes, rebuilt automatically from data/*/raw on first use
+data/eros/cache/
+data/kleopatra/cache/
+
+# experiment by-products (raw.json / summary.json hold every result)
+results/validation/runs_partial.jsonl
+results/validation_m3_backup/
+
+# LaTeX build files
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz

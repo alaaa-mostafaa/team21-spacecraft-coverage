@@ -1,0 +1,50 @@
+%Latex Template for the Thesis document for the German University in Cairo (GUC)
+%It will be used mainly for M.Sc and PhD theses,
+%however can be modified for B.Sc. thesis as well
+%Copyrights: The Multi-Robot Systems Research Group - Mechatronics Engineering
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\documentclass[12pt,a4paper,oneside]{book}
+\include{Sections/01_class_and_packages}
+\include{Sections/02_new_commands}
+\include{Sections/03_Authors_info} %change your info
+\input{generated/numbers} % numbers quoted in the text (make_assets.py)
+\input{generated/numbers_ga} % GA numbers quoted in the text (experiments/ga_assets.py)
+% (all results are in; generated/pending.tex is no longer needed)
+
+\begin{document}
+\include{Sections/04_titlepage} %change number of supervisors, Date
+\include{Sections/07_declaration}
+\include{Sections/08_acknowledgments}
+\include{Sections/09_abstract}
+\include{Sections/10_toc_figures_tables}
+%========================================================
+%redefine page style:
+\pagestyle{headings}
+\pagenumbering{arabic}
+%include chapters in the following part:
+%========================================
+\include{chapters/introduction}
+\include{chapters/background}
+\include{chapters/Methodology}
+\include{chapters/orbital}
+\include{chapters/sa}
+\include{chapters/cases}
+\include{chapters/validation}
+\include{chapters/results}
+\include{chapters/ga}
+\include{chapters/ga_results}
+\include{chapters/conclusion}
+\include{chapters/future_work}
+
+
+%Add the appendix here:
+%==========================
+\include{chapters/appendix}     
+
+
+%Add the bibliography here:
+%=============================
+\include{chapters/bibliography}
+
+
+\end{document}

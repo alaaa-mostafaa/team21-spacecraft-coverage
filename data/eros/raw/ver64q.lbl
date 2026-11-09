@@ -1,0 +1,124 @@
+PDS_VERSION_ID        = PDS3                                                  
+                                                                              
+RECORD_TYPE           = "FIXED_LENGTH"                                        
+RECORD_BYTES          = 57                                                    
+FILE_RECORDS          = 74503                                                 
+                                                                              
+^COUNTS_TABLE         = ("VER64Q.TAB",1)                                      
+^VERTEX_TABLE         = ("VER64Q.TAB",2)                                      
+^PLATE_TABLE          = ("VER64Q.TAB",25352)                                  
+                                                                              
+DATA_SET_ID           = "NEAR-A-MSI-5-EROSSHAPE-V1.0"                         
+PRODUCT_NAME          = "EROS Q=64 VERTEX-FACET SHAPE MODEL"                  
+PRODUCT_ID            = "VERTEX_VER64Q_TAB"                                   
+INSTRUMENT_HOST_NAME  = "NEAR EARTH ASTEROID RENDEZVOUS"                      
+INSTRUMENT_NAME       = "MULTI-SPECTRAL IMAGER"                               
+TARGET_NAME           = "433 EROS"                                            
+START_TIME            = 2000-02-15T02:04:07.982                               
+STOP_TIME             = 2001-02-12T02:29:45.126                               
+PRODUCT_CREATION_TIME = 2008-03-21                                            
+                                                                              
+                                                                              
+OBJECT     = COUNTS_TABLE                                                     
+  ROWS               = 1                                                      
+  ROW_BYTES          = 57                                                     
+  INTERCHANGE_FORMAT = "ASCII"                                                
+  COLUMNS            = 2                                                      
+  DESCRIPTION        = "Table that gives the count of vertices and plates     
+    representing the surface of the numerical shape model of 433 Eros,        
+    derived from the Implicitly Connected Quadrilateral (ICQ)                 
+    model with q = 64, also included in this data set.  The shape model       
+    comprises triangular plates and vertices that are specified in a          
+    body-fixed coordinate system."                                            
+                                                                              
+  OBJECT     = COLUMN                                                         
+    COLUMN_NUMBER = 1                                                         
+    NAME          = "NUMVERTICES"                                             
+    DESCRIPTION   = "NUMBER OF VERTICES IN SHAPE MODEL"                       
+    DATA_TYPE     = ASCII_INTEGER                                             
+    START_BYTE    = 1                                                         
+    BYTES         = 12                                                        
+    FORMAT        = "I12"                                                     
+  END_OBJECT = COLUMN                                                         
+                                                                              
+  OBJECT     = COLUMN                                                         
+    COLUMN_NUMBER = 2                                                         
+    NAME          = "NUMPLATES"                                               
+    DESCRIPTION   = "NUMBER OF TRIANGULAR PLATES IN SHAPE MODEL"              
+    DATA_TYPE     = ASCII_INTEGER                                             
+    START_BYTE    = 14                                                        
+    BYTES         = 12                                                        
+    FORMAT        = "I12"                                                     
+  END_OBJECT = COLUMN                                                         
+END_OBJECT = COUNTS_TABLE                                                     
+                                                                              
+OBJECT     = VERTEX_TABLE                                                     
+  ROWS               = 25350                                                  
+  ROW_BYTES          = 57                                                     
+  INTERCHANGE_FORMAT = "ASCII"                                                
+  COLUMNS            = 2                                                      
+  DESCRIPTION        = "Table of vertices of numerical shape model.           
+    These are the vertices of plates that approximate the surface             
+    of the target.  Each row of this table contains the X, Y and Z            
+    coordinates of one vertex in a Cartesian coordinate system.  "            
+                                                                              
+  OBJECT     = COLUMN                                                         
+    COLUMN_NUMBER = 1                                                         
+    NAME          = "VERTEX_NUMBER"                                           
+    DESCRIPTION   = "A unique number assigned to each vertex"                 
+    DATA_TYPE     = "ASCII_INTEGER"                                           
+    START_BYTE    = 1                                                         
+    BYTES         = 10                                                        
+    FORMAT        = "I10"                                                     
+  END_OBJECT = COLUMN                                                         
+                                                                              
+  OBJECT     = COLUMN                                                         
+    COLUMN_NUMBER = 2                                                         
+    NAME          = "VERTEX_COORDINATES"                                      
+    DESCRIPTION   = "The (x,y,z) coordinates of one vertex in the model"      
+    UNIT          = "KILOMETER"                                               
+    DATA_TYPE     = "ASCII_REAL"                                              
+    START_BYTE    = 11                                                        
+    BYTES         = 45                                                        
+    ITEMS         = 3                                                         
+    ITEM_BYTES    = 15                                                        
+    FORMAT        = "3(F15.5)"                                                
+  END_OBJECT = COLUMN                                                         
+END_OBJECT = VERTEX_TABLE                                                     
+                                                                              
+OBJECT     = PLATE_TABLE                                                      
+  ROWS               = 49152                                                  
+  ROW_BYTES          = 57                                                     
+  INTERCHANGE_FORMAT = "ASCII"                                                
+  COLUMNS            = 2                                                      
+  DESCRIPTION        = "Table of triangular plates of numerical shape model.  
+    These triangular plates approximate the surface of the target.  The       
+    corners of each triangular plate are three vertices from the vertex       
+    table, indicated by vertex number.                                        
+    "                                                                         
+                                                                              
+  OBJECT     = COLUMN                                                         
+    COLUMN_NUMBER = 1                                                         
+    NAME          = "PLATE_NUMBER"                                            
+    DESCRIPTION   = "A unique number assigned to each plate"                  
+    DATA_TYPE     = "ASCII_INTEGER"                                           
+    START_BYTE    = 1                                                         
+    BYTES         = 10                                                        
+    FORMAT        = "I10"                                                     
+  END_OBJECT = COLUMN                                                         
+                                                                              
+  OBJECT     = COLUMN                                                         
+    COLUMN_NUMBER = 2                                                         
+    NAME          = "PLATE_VERTICES"                                          
+    DESCRIPTION   = "The vertex numbers of the three vertices defining        
+      this triangular plate."                                                 
+    DATA_TYPE     = "ASCII_INTEGER"                                           
+    START_BYTE    = 11                                                        
+    BYTES         = 30                                                        
+    ITEMS         = 3                                                         
+    ITEM_BYTES    = 10                                                        
+    FORMAT        = "3(I10)"                                                  
+  END_OBJECT = COLUMN                                                         
+END_OBJECT = PLATE_TABLE                                                      
+                                                                              
+END                                                                           

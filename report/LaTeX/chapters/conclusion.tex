@@ -1,0 +1,43 @@
+\chapter{Conclusion}
+\label{ch:conclusion}
+
+\begin{itemize}
+\item \textbf{Formulation and implementation.} The fleet design problem was finalised as a
+mixed-integer, single-objective problem in which the optimiser chooses the number of spacecraft
+(on/off switches), the circular orbit of each, and the mission duration, trading coverage of the
+sunlit surface against fleet cost, energy and time under radius, separation and battery
+constraints. It is implemented as a modular Algorithm $\rightarrow$ Feasibility $\rightarrow$ Engine
+pipeline around a true-scale simulation (Kepler orbits, spinning non-convex shape model, occlusion,
+sunlight and shadows, camera resolution, batteries), and \ac{SA} was written from scratch on top of
+it with problem-specific neighbourhood and repair operators.
+\item \textbf{Designs.} \ac{SA} sends only the spacecraft a mission needs: two for long Eros missions,
+which it ends after about two days at 95\,\% coverage, and three to four when only hours are
+available. The same code and settings work unchanged on the 46 times larger, strongly concave
+Kleopatra (two to three spacecraft, 75\,\% in about 18\,h). The optimiser discovered on its own that the
+best orbits sit just above the camera's range, at 3.5 times the body's radius on both bodies, and are
+tilted about 30--35$^\circ$ rather than polar because the poles are never lit.
+\item \textbf{Validation.} The simulator agrees with hand calculations; \ac{SA} finds the known optima of
+benchmark functions; it beats random search with the same budget in all nine settings and in every
+run ($p=0.004$), by 6 to 21 points of coverage, the more so the shorter the mission; under the
+assumptions of the literature it reproduces their near-complete coverage of Eros (98\,\%); its fleet
+sizes lie in the flat optimum found by forcing the fleet size; and its designs hold on a four times
+finer model.
+\item \textbf{Algorithm.} The cooling schedule is the most important parameter: fitting $\alpha$ to the
+budget avoids both premature freezing and a search that never settles. A moderate start temperature
+($p_0\le0.5$) and large initial steps are best. The track cache makes a move cost at most two
+spacecraft simulations, so \ac{SA} is also several times faster per evaluation than random search.
+\item \textbf{Genetic Algorithm (Milestone 4).} The \ac{GA} uses the whole mission as chromosome,
+aligns the spacecraft slots of the parents before crossover, swaps or blends whole orbits, starts from
+a population stratified over the fleet size and reuses \ac{SA}'s move as mutation. A 23-setting
+parameter study confirmed all its defaults and showed that both operators are needed. It finds the
+known optima of benchmark functions in every run, reproduces the 98\,\% literature coverage, and beats
+random search everywhere. With 2000 evaluations \ac{SA} is slightly better on the standard missions
+(significant in two of nine) and converges about 1.7 times faster; the \ac{GA} is on a par in seven,
+twice as consistent between runs, better on the three hardest Kleopatra missions, robust with 101 genes
+where \ac{SA} gets stuck, and significantly better on the hardest Eros mission once the budget is 5000
+evaluations. \ac{SA} suits small budgets and moderate missions, the \ac{GA} large fleets, very short
+missions and larger budgets (Chapter~\ref{ch:garesults}).
+\item \textbf{Limitations.} The orbits ignore the irregular gravity field; the Sun direction is fixed;
+the weights decide the value of one more spacecraft or day; and \ac{SA} tends to send slightly too few
+spacecraft where the fitness is flat in $N$ (Chapter~\ref{ch:future}).
+\end{itemize}

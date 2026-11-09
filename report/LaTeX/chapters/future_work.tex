@@ -1,0 +1,21 @@
+\chapter{Future Work}
+\label{ch:future}
+
+\begin{itemize}
+\item \textbf{Further algorithms.} The \ac{GA} of this milestone plugs into the pipeline unchanged;
+the next milestone adds a swarm method (\ac{PSO}) the same way, compared on the same case studies with
+the same budget, seeds and statistical tests.
+\item \textbf{Hybrid and parallel \ac{GA}.} A final local search with \ac{SA}'s move around the best
+design would add \ac{SA}'s fine-tuning to the \ac{GA}'s exploration, and evaluating the children of a
+generation in parallel would make the \ac{GA} several times faster in wall-clock time.
+\item \textbf{Trade-off without weights.} The weights decide how much one more spacecraft or one more
+day is worth. \ac{NSGA}-II will return the whole Pareto front of coverage, fleet cost, energy and
+mission time, on which the weighted designs of this milestone should lie.
+\item \textbf{Gravity.} Orbits are ideal Kepler circles. The irregular gravity of Eros, and even more
+of the dog-bone shaped Kleopatra, makes close orbits drift or become unstable; a gravity field
+computed from the shape (polyhedron model) is the next step towards realism.
+\item \textbf{Seasons and pointing.} The Sun direction is fixed and the cameras always point at the
+centre of mass; a moving Sun and off-nadir pointing would add realism and decision variables.
+\item \textbf{Statistics.} Some forced-size cases use three runs; more runs would tighten the spreads
+and the $p$-values.
+\end{itemize}

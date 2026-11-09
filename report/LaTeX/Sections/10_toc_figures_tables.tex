@@ -1,0 +1,101 @@
+%add table of contents:
+\cleardoublepage
+\phantomsection
+\tableofcontents
+\clearpage
+
+%add list of Abbreviations:
+\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{chapter}{List of Abbreviations}
+\chapter*{List of Abbreviations}
+\begin{acronym}[\hspace{3cm}]
+  \acro{FOV}{Field of View}
+  \acro{GA}{Genetic Algorithm}
+  \acro{GSD}{Ground Sample Distance}
+  \acro{GWO}{Grey Wolf Optimiser}
+  \acro{NSGA}{Non-dominated Sorting Genetic Algorithm}
+  \acro{PSO}{Particle Swarm Optimisation}
+  \acro{RoI}{Region of Interest}
+  \acro{SA}{Simulated Annealing}
+  \acro{RS}{Random Search}
+\end{acronym}
+\clearpage
+
+%add nomenclature:
+\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{chapter}{Nomenclature}
+\chapter*{Nomenclature}
+{\footnotesize
+\begin{longtable}{@{}p{2.4cm}p{10.2cm}l@{}}
+\toprule
+Symbol & Meaning & Unit \\
+\midrule
+\endhead
+\multicolumn{3}{@{}l}{\textit{Decision variables}} \\
+$\mathbf{x}$ & decision vector, $\dim\mathbf{x}=1+5N_{\max}$ & -- \\
+$T$ & mission duration & d \\
+$a_i$ & orbit radius of slot $i$ (circular orbit) & km \\
+$\iota_i$ & inclination of orbit $i$ & deg \\
+$\Omega_i$ & longitude of the ascending node of orbit $i$ & deg \\
+$M_{0,i}$ & mean anomaly (start position) of spacecraft $i$ at $t=0$ & deg \\
+$s_i$ & on/off switch of slot $i$ & -- \\
+$N$, $N_{\max}$ & number of flying spacecraft, number of slots & -- \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Objectives, fitness and constraints}} \\
+$C$ & coverage: imaged share of the sunlit area & -- \\
+$S_a$, $A^{*}$ & area imaged within $T$, area sunlit at some time within $T_{\max}$ & km$^2$ \\
+$Z$ & fleet cost & -- \\
+$E$, $\Delta V_i$, $E_{\mathrm{elec},i}$ & energy term, velocity change and electrical energy of spacecraft $i$ & --, m/s, J \\
+$J$ & fitness (minimised) & -- \\
+$w_C,w_Z,w_E,w_T$ & weights of coverage, cost, energy and time & -- \\
+$g_1\dots g_4$ & normalised constraints (radius, radius, separation, battery) & -- \\
+$J_0$, $\rho$ & base cost and penalty coefficient of infeasible designs & -- \\
+$T_{\min}$, $T_{\max}$ & shortest and longest allowed mission & d \\
+$r_{\min}$, $r_{\max}$ & smallest and largest orbit radius & km \\
+$\kappa$ & safety factor, $r_{\min}=\kappa R_{\max}$ & -- \\
+$d_{\mathrm{sep}}$ & minimum distance between spacecraft & km \\
+$q_i$, $q_{\min}$ & battery state of charge of spacecraft $i$, its lower limit & -- \\
+$n_{\mathrm{ref}}$ & reference fleet size for normalisation (10) & -- \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Model}} \\
+$\mu$ & gravitational parameter of the asteroid & km$^3$/s$^2$ \\
+$P_{\mathrm{rot}}$, $\omega_{\mathrm{ast}}$ & rotation period and spin rate of the asteroid & h, rad/s \\
+$R_{\max}$ & distance of the farthest surface point from the centre & km \\
+$f$, $A_f$, $\mathbf{c}_f$, $\mathbf{n}_f$ & facet index, area, centre and outward normal & --, km$^2$, km, -- \\
+$t_k$, $\Delta t$, $N_t$ & time step $k$, step length, number of steps & s, min, -- \\
+$n_i$, $u_i$ & mean motion and argument of latitude of spacecraft $i$ & rad/s, rad \\
+$\mathbf{r}^{I}_i$, $\mathbf{r}^{B}_i$ & position of spacecraft $i$ in the inertial and body frame & km \\
+$\psi$, $p$ & camera field of view and pixels across & deg, -- \\
+$\ell$, $\ell_{\max}$ & range facet--spacecraft and usable camera range & km \\
+$\mathrm{GSD}$ & ground sample distance (size of one pixel on the ground) & m \\
+$\eta_{\max}$ & largest emission angle & deg \\
+$V_{ifk}$, $u_f$ & facet $f$ imaged by spacecraft $i$ at step $k$; imaged by any spacecraft & -- \\
+$n_{\mathrm{img},i}$ & number of frames taken by spacecraft $i$ & -- \\
+$r_0$, $v_0$ & radius and speed of the arrival orbit & km, km/s \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Simulated Annealing}} \\
+$\Theta$, $\Theta_0$, $\Theta_{\min}$ & temperature, start and final temperature & -- \\
+$\alpha$ & geometric cooling factor & -- \\
+$L$ & moves per temperature (Markov chain length) & -- \\
+$p_0$ & initial acceptance probability of a typical worse move & -- \\
+$\sigma$, $\sigma_0$ & move size and initial move size (fraction of a variable's range) & -- \\
+$B$, $n_{\mathrm{init}}$ & evaluation budget, random designs of the warm start & -- \\
+\bottomrule
+\end{longtable}}
+\clearpage
+
+%add list of figures:
+\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{chapter}{List of Figures}
+\listoffigures
+\clearpage
+
+%add list of tables:
+\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{chapter}{List of Tables}
+\listoftables
+\clearpage

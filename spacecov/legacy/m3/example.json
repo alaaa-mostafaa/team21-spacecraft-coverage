@@ -1,0 +1,12 @@
+{
+  "name": "Hand-made fleet: 3 spacecraft with the 6-degree camera around 433 Eros, 10-day mission",
+  "asteroid": {"source": "eros", "faces": 1500},
+  "config": {"duration_days": 10.0, "dt_min": 10.0, "n_max": 5, "occlusion": true,
+             "lighting": true, "shadows": true, "sun_lat_deg": 0.0},
+  "spacecraft": [
+    {"type": 1, "a": 50.0, "e": 0.10, "inc": 30.0,  "raan": 0.0,   "argp": 0.0,  "M0": 0.0},
+    {"type": 1, "a": 45.0, "e": 0.05, "inc": 90.0,  "raan": 60.0,  "argp": 0.0,  "M0": 120.0},
+    {"type": 1, "a": 55.0, "e": 0.05, "inc": 120.0, "raan": 200.0, "argp": 90.0, "M0": 240.0}
+  ],
+  "sa": {"max_evals": 1500, "seed": 0}
+}

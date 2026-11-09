@@ -1,0 +1,17 @@
+# Simulation core
+numpy>=1.24
+scipy>=1.10
+trimesh>=4.0
+rtree>=1.0
+embreex>=2.17 ; platform_machine == "x86_64" or platform_machine == "AMD64"   # ~10-50x faster ray casting (occlusion)
+
+# 3D viewer and live charts
+pyvista==0.44.2
+pyvistaqt==0.11.1
+PyQt5>=5.15
+
+# Report figures (experiments/run_experiments.py)
+matplotlib>=3.7
+
+# Tests
+pytest>=7

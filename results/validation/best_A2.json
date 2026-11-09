@@ -1,0 +1,85 @@
+{
+  "name": "best SA design, Eros 1 d (seed 4, J = 0.1972)",
+  "asteroid": {
+    "source": "eros",
+    "faces": 6000
+  },
+  "config": {
+    "mu": 0.0004463,
+    "p_rot_h": 5.27,
+    "dt_min": 10.0,
+    "camera": 1,
+    "gsd_max_m": 3.0,
+    "eta_max_deg": 65.0,
+    "occlusion": true,
+    "lighting": true,
+    "shadows": true,
+    "sun_lat_deg": 0.0,
+    "incidence_max_deg": 70.0,
+    "p_base_w": 50.0,
+    "p_cam_w": 10.0,
+    "e_img_j": 100.0,
+    "p_tx_w": 30.0,
+    "downlink_bps": 100000.0,
+    "p_solar_w": 180.0,
+    "battery_wh": 200.0,
+    "eclipse_radius_km": 8.4,
+    "r0": 50.0,
+    "body": "eros",
+    "n_max": 5,
+    "fixed_n": false,
+    "t_min_days": 0.25,
+    "t_max_days": 1.0,
+    "kappa": 1.5,
+    "r_min": null,
+    "r_max": 100.0,
+    "d_sep": 2.0,
+    "soc_min": 0.2,
+    "weights": [
+      0.5,
+      0.15,
+      0.15,
+      0.2
+    ],
+    "n_ref": 10,
+    "infeasible_cost": 1000.0,
+    "rho": 1000.0
+  },
+  "design": {
+    "N": 4,
+    "T_days": 0.36840929013407,
+    "spacecraft": [
+      {
+        "a": 61.35014943384323,
+        "inc": 54.72975115401306,
+        "raan": 138.96154439952107,
+        "M0": 183.48034259893225
+      },
+      {
+        "a": 64.31255962291287,
+        "inc": 34.08947789769476,
+        "raan": 166.9906041016461,
+        "M0": 157.35944197041306
+      },
+      {
+        "a": 62.97580852541543,
+        "inc": 136.21680678033255,
+        "raan": 194.6359198516921,
+        "M0": 116.1231296323472
+      },
+      {
+        "a": 60.75340059128522,
+        "inc": 147.7335380708552,
+        "raan": 16.270945861991045,
+        "M0": 2.008309745850508
+      }
+    ]
+  },
+  "algorithm": {
+    "name": "sa",
+    "params": {
+      "max_evals": 2000,
+      "seed": 4
+    }
+  }
+}

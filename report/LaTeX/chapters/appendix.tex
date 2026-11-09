@@ -1,0 +1,63 @@
+\appendix
+\renewcommand{\appendixtocname}{Appendix}
+\renewcommand{\appendixpagename}{\appendixtocname}
+\addappheadtotoc
+\setboolean{@twoside}{false}
+\appendixpage
+
+\chapter{Running the Code}
+\label{app:code}
+
+The code is written in Python~3.10. It uses NumPy for all numerics (the \ac{SA} algorithm itself
+uses nothing else), \texttt{trimesh} with Embree for ray casting, SciPy only for the
+Mann--Whitney test of the validation, Matplotlib for charts, and PyVista with PyQt5 for the 3D
+viewer. Every command is run from the project folder with the launcher \texttt{sim}
+(\texttt{sim.bat} on Windows), which creates a virtual environment and installs
+\texttt{requirements.txt} on first use.
+
+\begin{table}[H]
+\centering
+\caption{Commands}
+\label{tab:commands}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{7.6cm}X@{}}
+\toprule
+Command & What it does \\
+\midrule
+\texttt{./sim} & open the 3D viewer on the example design (optimiser available in the ``Optimiser'' tab) \\
+\texttt{./sim eval scenarios/orbital\_example.json} & print $J$, its terms and every constraint of a design \\
+\texttt{./sim optimise scenarios/orbital\_example.json --evals 2000 --seed 1 --body eros --n-max 5 --t-max 2 --save best.json} & run \ac{SA} without the viewer and save the best design \\
+\texttt{./sim best.json} & open a saved design in the viewer \\
+\texttt{./sim validate --seeds 5 --evals 2000} & every case study and validation run of this report (V2--V7) \\
+\texttt{./sim validate --only P} & the parameter study (case E) \\
+\texttt{./sim test} & the 66 automated tests \\
+\texttt{python report/LaTeX/make\_assets.py} & rebuild every table and chart of this report from the results \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The validation writes to \texttt{results/validation/}: \texttt{run.log} (the console output, one
+line per run), \texttt{runs\_partial.jsonl} (every run as soon as it finishes), \texttt{raw.json}
+(all runs with their best decision vector and convergence curve), \texttt{summary.json} and one
+CSV file per part, and \texttt{run\_info.json} (command, git commit, machine, start and end time).
+
+\chapter{Decision Vector Layout}
+\label{app:vector}
+
+\begin{table}[H]
+\centering
+\caption{Layout of the decision vector $\mathbf{x}$ (Eq.~\ref{eq:x}); slot $i=1\dots N_{\max}$}
+\footnotesize
+\begin{tabular}{@{}lllll@{}}
+\toprule
+Index & Variable & Lower bound & Upper bound & Kind \\
+\midrule
+0 & $T$ (days) & $T_{\min}$ & $T_{\max}$ & real, reflected \\
+$1+5(i-1)$ & $a_i$ (km) & $r_{\min}$ & $r_{\max}$ & real, reflected \\
+$2+5(i-1)$ & $\iota_i$ (deg) & 0 & 180 & real, reflected \\
+$3+5(i-1)$ & $\Omega_i$ (deg) & 0 & 360 & real, periodic \\
+$4+5(i-1)$ & $M_{0,i}$ (deg) & 0 & 360 & real, periodic \\
+$5+5(i-1)$ & $s_i$ & 0 & 1 & binary \\
+\bottomrule
+\end{tabular}
+\end{table}

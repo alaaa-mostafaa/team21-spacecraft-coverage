@@ -1,0 +1,82 @@
+\begin{thebibliography}{10}
+
+\bibitem{dunham2002}
+David~W. Dunham, Robert~W. Farquhar, James~V. McAdams, et~al.
+\newblock Implementation of the first asteroid landing.
+\newblock {\em Icarus}, 159(2):433--438, 2002.
+
+\bibitem{nallapu2021}
+Ravi~Teja Nallapu and Jekan Thangavelautham.
+\newblock Automated design architectures for co-orbiting spacecraft swarms for
+  planetary moon mapping.
+\newblock {\em Advances in Space Research}, 67(11):3559--3582, 2021.
+
+\bibitem{nallapu2019}
+Ravi~Teja Nallapu and Jekan Thangavelautham.
+\newblock Attitude control of spacecraft swarms for visual mapping of planetary
+  bodies.
+\newblock In {\em Proceedings of the IEEE Aerospace Conference}, pages 1--16,
+  Big Sky, MT, USA, 2019.
+
+\bibitem{melaku2023}
+Shimeles~Demissie Melaku and Hae-Dong Kim.
+\newblock Optimization of multi-mission {CubeSat} constellations with a
+  multi-objective genetic algorithm.
+\newblock {\em Remote Sensing}, 15(6):1572, 2023.
+
+\bibitem{guan2020}
+Meiqian Guan, Tianhe Xu, Fan Gao, Wenfeng Nie, and Honglei Yang.
+\newblock Optimal {Walker} constellation design of {LEO}-based global
+  navigation and augmentation system.
+\newblock {\em Remote Sensing}, 12(11):1845, 2020.
+
+\bibitem{stolfi2023}
+Daniel Stolfi~Rosso and Gr{\'e}goire Danoy.
+\newblock Spacecraft swarm orbital formation optimisation using evolutionary
+  techniques.
+\newblock In {\em Proceedings of the Genetic and Evolutionary Computation
+  Conference Companion (GECCO '23)}. ACM, 2023.
+
+\bibitem{raymond2011}
+Carol~A. Raymond, Ralf Jaumann, Andreas Nathues, et~al.
+\newblock The {Dawn} topography investigation.
+\newblock {\em Space Science Reviews}, 163:487--510, 2011.
+
+\bibitem{broz2021}
+Miroslav Bro{\v{z}}, Franck Marchis, Laurent Jorda, et~al.
+\newblock An advanced multipole model for (216) {Kleopatra} triple system.
+\newblock {\em Astronomy \& Astrophysics}, 653:A56, 2021.
+
+\bibitem{gaskell2008}
+Robert~W. Gaskell.
+\newblock Gaskell {Eros} shape model v1.0.
+\newblock NASA Planetary Data System, NEAR-A-MSI-5-EROSSHAPE-V1.0, 2008.
+
+\bibitem{ostro2000}
+Steven~J. Ostro, R.~Scott Hudson, Michael~C. Nolan, et~al.
+\newblock Radar observations of asteroid 216 {Kleopatra}.
+\newblock {\em Science}, 288(5467):836--839, 2000.
+
+\bibitem{moller1997}
+Tomas M{\"o}ller and Ben Trumbore.
+\newblock Fast, minimum storage ray-triangle intersection.
+\newblock {\em Journal of Graphics Tools}, 2(1):21--28, 1997.
+
+\bibitem{kirkpatrick1983}
+Scott Kirkpatrick, C.~Daniel Gelatt, and Mario~P. Vecchi.
+\newblock Optimization by simulated annealing.
+\newblock {\em Science}, 220(4598):671--680, 1983.
+
+\bibitem{metropolis1953}
+Nicholas Metropolis, Arianna~W. Rosenbluth, Marshall~N. Rosenbluth, Augusta~H.
+  Teller, and Edward Teller.
+\newblock Equation of state calculations by fast computing machines.
+\newblock {\em The Journal of Chemical Physics}, 21(6):1087--1092, 1953.
+
+\bibitem{mann1947}
+Henry~B. Mann and Donald~R. Whitney.
+\newblock On a test of whether one of two random variables is stochastically
+  larger than the other.
+\newblock {\em The Annals of Mathematical Statistics}, 18(1):50--60, 1947.
+
+\end{thebibliography}

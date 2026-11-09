@@ -1,0 +1,16 @@
+{
+  "name": "Hand-made design: 3 spacecraft (narrow camera), 3-day mission around 433 Eros",
+  "asteroid": {"source": "eros", "faces": 1500},
+  "config": {"body": "eros", "n_max": 5, "t_min_days": 0.25, "t_max_days": 10.0, "dt_min": 10.0,
+             "camera": 1, "occlusion": true, "lighting": true, "shadows": true, "sun_lat_deg": 0.0,
+             "weights": [0.5, 0.15, 0.15, 0.2]},
+  "design": {
+    "N": 3, "T_days": 3.0,
+    "spacecraft": [
+      {"a": 50.0, "inc": 30.0,  "raan": 0.0,   "M0": 0.0},
+      {"a": 45.0, "inc": 90.0,  "raan": 60.0,  "M0": 120.0},
+      {"a": 40.0, "inc": 120.0, "raan": 200.0, "M0": 240.0}
+    ]
+  },
+  "algorithm": {"name": "sa", "params": {"max_evals": 1500, "seed": 0}}
+}

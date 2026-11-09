@@ -1,0 +1,71 @@
+\chapter{Literature Review}
+\label{ch:background}
+
+This chapter reviews five works (2019--2023) that formulate a multi-spacecraft coverage
+problem and solve it with a meta-heuristic: a \acf{GA}, \acf{PSO}, \ac{NSGA}-II,
+\ac{NSGA}-III and \acf{SA}. Table~\ref{tab:lit} summarises their formulations.
+
+\section{Swarm co-orbits for planetary moon mapping}
+Nallapu and Thangavelautham~\cite{nallapu2021} design swarms that map the moon Deimos.
+The variables mix integers (number of encounters, spacecraft per encounter) with reals
+(encounter angles). The objective is $\min N$ subject to coverage $\ge 90\,\%$, no
+collisions and a fuel budget. A GA is compared with PSO, which uses a penalty for
+infeasible designs. GA found 3 spacecraft for 90.5\,\% coverage, PSO found 4.
+\emph{Strength:} a fair GA/PSO comparison. \emph{Shortcoming:} only one objective, and
+hidden terrain is not checked.
+
+\section{Swarm flyby mapping of asteroid Eros}
+Nallapu and Thangavelautham~\cite{nallapu2019} place $N$ spacecraft on a ring around
+Eros. The variables are $N\in[1,20]$ and each spacecraft's angle $\theta_i\in[0,2\pi]$;
+the problem is $\min N$ subject to $100\,\%$ surface coverage. A mixed-integer GA found
+that 8 spacecraft cover all of Eros in one pass. \emph{Shortcoming:} the spacecraft only point at the centre,
+lighting and blocked views are ignored.
+
+\section{Multi-mission CubeSat constellation design}
+Melaku and Kim~\cite{melaku2023} optimise a CubeSat constellation using inclination $i$,
+number of planes $P$ and satellites per plane $S$. They minimise $PS$ and the average
+revisit time, and maximise coverage, with NSGA-II (population 100, 500 generations). For
+example, 20 satellites give 98.8\,\% coverage. \emph{Strength:} a Pareto front of
+trade-offs. \emph{Shortcoming:} only three variables, and the Earth is a sphere.
+
+\section{Walker constellation design for LEO navigation}
+Guan et al.~\cite{guan2020} design navigation constellations with variables $S$, $P$, $i$
+and altitude. They minimise the worst-case positioning error (GDOP) and the number of
+satellites with NSGA-III, and use a GA for a single-objective case. For example, 180
+satellites at 1500\,km give GDOP $<3$. \emph{Strength:} a worst-case objective and parallel
+computing for slow evaluations. \emph{Shortcoming:} navigation rather than imaging.
+
+\section{Swarm orbital formation around asteroids}
+Stolfi Rosso and Danoy~\cite{stolfi2023} spread spacecraft evenly around an asteroid to
+maximise coverage while saving fuel. A GA tunes the formation parameters for 2, 3, 5 and
+10 satellites, and SA tunes each spacecraft on board; SA was more accurate over 400
+scenarios. \emph{Strength:} shows SA works for this kind of problem. \emph{Shortcoming:}
+even spacing is used instead of measured coverage.
+
+\begin{table}[H]
+\centering
+\caption{Summary of the reviewed formulations}
+\label{tab:lit}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}p{1.1cm}p{2.9cm}Xp{1.9cm}p{2.7cm}@{}}
+\toprule
+Work & Decision variables & Objectives & Algorithm & Key result \\
+\midrule
+\cite{nallapu2021} 2021 & encounters, spacecraft per encounter, angles & $\min N$ s.t.\ coverage, collision, fuel & GA, PSO & 3 S/C, 90.5\,\% \\
+\cite{nallapu2019} 2019 & $N$, ring angles $\theta_i$ & $\min N$ s.t.\ 100\,\% coverage & GA & 8 S/C, 100\,\% of Eros \\
+\cite{melaku2023} 2023 & $i$, $P$, $S$ & $\min PS$, $\min$ revisit, $\max$ coverage & NSGA-II & 20 S/C, 98.8\,\% \\
+\cite{guan2020} 2020 & $S$, $P$, $i$, altitude & $\min$ worst GDOP, $\min SP$ & NSGA-III, GA & 180 S/C, GDOP $<3$ \\
+\cite{stolfi2023} 2023 & formation parameters & even spread, fuel & GA, SA & SA best in 400 cases \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{Metrics and gap.} From these works we take coverage as the main objective, the number of
+spacecraft and the fuel as costs, and the best, mean and standard deviation of the fitness over
+repeated runs to compare algorithms. \emph{Gap:} the reviewed works either fix the trajectories
+(a single flyby or a ring), treat the body as convex or fully lit, or optimise the number of
+spacecraft separately from their orbits. Our formulation decides the fleet size, every orbit and
+the mission duration together, and measures coverage on the real non-convex shape with occlusion,
+sunlight, cast shadows and an image-resolution limit. The comparison with
+Nallapu and Thangavelautham~\cite{nallapu2019} is repeated with our model in
+Section~\ref{sec:v5}.

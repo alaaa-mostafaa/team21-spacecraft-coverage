@@ -1,0 +1,29 @@
+{
+  "command": "experiments/validate.py --seeds 5 --evals 2000 --workers 6",
+  "parts": [
+    "V2",
+    "V3",
+    "V4",
+    "V5",
+    "V6"
+  ],
+  "seeds": 5,
+  "evals": 2000,
+  "workers": 6,
+  "quick": false,
+  "started": "2026-10-19 10:41:48",
+  "_t0": 1792395708.310347,
+  "git_branch": "merge/colleague-m3",
+  "git_commit": "def39e6ac494e7becfd834c6cd2a41c83f5261d7",
+  "uncommitted_changes": true,
+  "python": "3.10.12",
+  "machine": "Linux-6.8.0-138-generic-x86_64-with-glibc2.35",
+  "cpus": 12,
+  "threads_per_worker": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "finished": "2026-10-19 11:44:14",
+  "wall_seconds": 3746
+}

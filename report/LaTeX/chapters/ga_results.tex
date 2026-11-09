@@ -1,0 +1,305 @@
+\chapter{Genetic Algorithm: Validation, Results and Comparison with SA}
+\label{ch:garesults}
+
+This chapter reports every \ac{GA} experiment: the case studies and their inputs
+(Section~\ref{sec:gacases}), the validation (Section~\ref{sec:gavalid}), the parameter study that
+fixed the settings of Table~\ref{tab:gaparams} (Section~\ref{sec:gaparamstudy}), the results of the
+case studies (Section~\ref{sec:garesults}), two series of harder tests (Section~\ref{sec:gahard}) and
+the comparison of \ac{GA} and \ac{SA} with problem-specific performance indices
+(Section~\ref{sec:sa-vs-ga}). All runs are produced by \texttt{experiments/validate.py} (parts G2, GP,
+GV4, GV5, H, B) and all figures and tables by \texttt{experiments/ga\_assets.py}.
+
+%=====================================================================================
+\section{Case studies and input parameters}
+\label{sec:gacases}
+
+The \ac{GA} is run on the nine case studies A1--A6 and B1--B3 of Table~\ref{tab:cases}, with the
+\emph{same} evaluation budget (2000), the \emph{same} random seeds (0--4) and the same mission
+settings as \ac{SA}, so that every \ac{GA} run has an \ac{SA} twin. Three new cases push the problem
+to its limits: the large body Kleopatra with very short missions, and a fleet of up to 20 spacecraft
+(101 genes, twice the largest case of Milestone~3). A fourth series repeats three cases with a budget
+of 5000 evaluations. Table~\ref{tab:gacases} lists the new cases; all \ac{GA} parameters are those
+of Table~\ref{tab:gaparams}.
+
+\begin{table}[htbp]
+\centering
+\caption{Additional case studies of this milestone (mission settings as in Table~\ref{tab:cases};
+$T_{\min}=\min(6\,\mathrm{h},T_{\max}/4)$; five seeds per algorithm).}
+\label{tab:gacases}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}p{0.6cm}p{2.6cm}p{0.8cm}p{0.8cm}p{0.7cm}p{0.6cm}p{1.2cm}X@{}}
+\toprule
+Case & Body, setting & $T_{\max}$ & $T_{\min}$ & $N_{\max}$ & dim & Budget & Question \\
+\midrule
+H1 & Kleopatra & 6 h & 1.5 h & 10 & 51 & 2000 & \multirow{3}{=}{The hardest missions: a 217\,km body with a few hours, up to 101 genes. Which algorithm copes better?} \\
+H2 & Kleopatra & 2 h & 0.5 h & 10 & 51 & 2000 & \\
+H3 & Kleopatra & 6 h & 1.5 h & 20 & 101 & 2000 & \\
+\midrule
+L1 & Eros (= A2) & 1 d & 6 h & 5 & 26 & 5000 & \multirow{3}{=}{Does a larger budget change the ranking of the two algorithms?} \\
+L2 & Eros (= A6) & 2 h & 0.5 h & 10 & 51 & 5000 & \\
+L3 & Kleopatra (= B3) & 12 h & 3 h & 10 & 51 & 5000 & \\
+\midrule
+F & Eros, GA parameters varied & 2 d & 6 h & 5 & 26 & 2000 & parameter study (same case as \ac{SA}'s case E) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Cases H1--H3 are also solved by random search. Case F changes one \ac{GA} parameter at a time from
+the defaults (23 settings, Table~\ref{tab:gaparams}).
+
+%=====================================================================================
+\section{Validation}
+\label{sec:gavalid}
+
+\paragraph{Known optima (G2).} Since the \ac{GA} only sees the \texttt{Problem} interface, it is run
+unchanged on the benchmark functions of validation V2, whose global minimum is 0 at $\mathbf{x}=0$
+(10 seeds, 10\,000 evaluations each; Section~\ref{sec:ga-generic}: without slots, every gene is its
+own group). Table~\ref{tab:g2} compares it with \ac{SA}. The \ac{GA} reaches the optimum in every
+run of every function, with mean errors between $10^{-9}$ and $10^{-3}$ (at most $2\cdot10^{-3}$ in any run), several orders of magnitude
+below those of \ac{SA}. On the five-dimensional Rastrigin function, which has about $10^5$ local
+minima, \ac{SA} ends below 0.1 in only 70\,\% of the runs and the \ac{GA} in all of them: the
+population and the recombination of good coordinates from different individuals are exactly what
+a separable, highly multimodal function rewards. This validates the selection, elitism, crossover,
+mutation and budget machinery independently of the spacecraft model.
+
+\begin{table}[htbp]
+\centering
+\caption{Known-optimum test (minimum 0): best value reached, 10 seeds $\times$ 10\,000 evaluations.}
+\label{tab:g2}
+\small
+\input{generated/tab_g2}
+\end{table}
+
+\paragraph{Comparison with the literature (GV5).} Under the assumptions of the literature (every
+facet lit, no shadows; case D of Table~\ref{tab:cases}) the \ac{GA} images on average
+\gaAllLitC\,\% (best \gaAllLitBestC\,\%) of Eros, against 97.9\,\% for \ac{SA} and the near-complete
+coverage of about 98\,\% reported for this setting. Both algorithms choose two spacecraft and a
+mission of about 1.16 days, and their fitness is the same within 0.5\,\% ($J=0.0730$ for the \ac{GA},
+$0.0733$ for \ac{SA}).
+
+\paragraph{Feasibility and finer model.} All \gaFeasible{} final \ac{GA} designs of the case studies
+are feasible. Re-evaluated on the four times finer shape model (6000 facets), the coverage of the
+30 Eros designs changes by 2.0 points on average (at most 2.9), the same accuracy as found for the
+\ac{SA} designs in validation V7: the \ac{GA} does not exploit the coarseness of the search model.
+
+%=====================================================================================
+\section{Parameter study}
+\label{sec:gaparamstudy}
+
+Case F changes one parameter at a time from the starting values of Table~\ref{tab:gaparams}
+(five seeds each). Figure~\ref{fig:gaparams} shows every run and Table~\ref{tab:gp} the statistics.
+A value was to replace the starting value only if it was better by more than the seed-to-seed
+spread; a one-sided Mann--Whitney test~\cite{mann1947} against the default decides.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.86\textwidth]{Figures/fig_ga_params.png}
+\caption{Parameter study of the \ac{GA} (case F). Dots: best design of each of the five runs; bar:
+mean. Dashed line: the default settings.}
+\label{fig:gaparams}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{Parameter study (case F, five seeds per setting). Tracks: spacecraft actually simulated per
+run (computing cost independent of the machine).}
+\label{tab:gp}
+\footnotesize
+\input{generated/tab_gp}
+\end{table}
+
+\begin{itemize}
+\item \textbf{No setting is significantly better than the defaults, and seven are significantly
+worse} ($p<0.05$): $P=20$, $P=120$, the uniform start, a crossover fraction of 0 or 1, the tournament
+size $k=5$ and the fixed blend weight $\lambda=\tfrac12$. The defaults chosen by the reasoning of
+Chapter~\ref{ch:ga} are therefore kept.
+\item \textbf{Population size:} the expected U-shape. Small populations ($P=10$, 20) lose diversity
+early; large ones ($P=120$) leave only about 18 generations for selection and crossover to act.
+\item \textbf{Stratified start:} better than the uniform start by 0.017 ($p=0.048$), as argued in
+Section~\ref{sec:ga-init}.
+\item \textbf{Both operators are needed:} with mutation only ($\chi=0$) the \ac{GA} becomes a set of
+\ac{SA}-like steps without \ac{SA}'s acceptance rule and is the second-worst setting; with crossover
+only ($\chi=1$) no new gene values can appear. The mixture $\chi=0.8$ is best.
+\item \textbf{Blend weight:} the midpoint $\lambda=\tfrac12$ is the worst of all 23 settings
+($p=0.004$). It confirms the contraction argument of Section~\ref{sec:ga-crossover}: every blended
+gene lies between its parents, the population shrinks and the search stalls.
+\item \textbf{Blend probability:} $p_b=1$ reaches the same fitness as $p_b=0.3$ but simulates
+2.8 times more spacecraft (5381 against 1946 tracks per run), because every child orbit is new;
+$p_b=0$ is the cheapest (897 tracks) but worse. $p_b=0.3$ is the best compromise, as predicted by the
+``one new orbit per child'' argument of Table~\ref{tab:pblend}.
+\item \textbf{Alignment:} without it the results become erratic (standard deviation four times that
+of the default): some runs pair unrelated orbits and fail.
+\item \textbf{Mutation step:} $\sigma_0=0.5$ had the best mean over the first five seeds (0.162).
+A tie-breaker with ten further seeds (5--14) for both values gave means of 0.1756 ($\sigma_0=0.5$)
+and 0.1786 ($\sigma_0=0.25$) over 15 seeds, $p=0.53$: no real difference, so the default is kept. The
+tie-breaker also showed that five seeds can be optimistic: the default's mean rose from 0.169 to
+0.179. Small differences between good settings in Table~\ref{tab:gp} are therefore within the noise;
+only the significant differences are interpreted.
+\end{itemize}
+
+%=====================================================================================
+\section{Results of the case studies}
+\label{sec:garesults}
+
+Figure~\ref{fig:savsga} shows the best design of every run of the nine case studies for the three
+algorithms, and Figure~\ref{fig:convsaga} the median convergence. Both optimisers beat random search
+by a wide margin in every case and every run. The \ac{GA} reaches 73.5--95.7\,\% coverage on Eros
+missions of six hours to ten days and 47.2\,\% in two hours, and 64--76\,\% on Kleopatra.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{Figures/fig_sa_vs_ga.png}
+\caption{Best fitness of every run (dots) and mean (bar) for \ac{SA}, \ac{GA} and random search,
+budget 2000 evaluations, five seeds per algorithm and case.}
+\label{fig:savsga}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{Figures/fig_convergence_sa_ga.png}
+\caption{Convergence: median over the seeds of the best fitness found so far, with the interquartile
+band. \ac{SA}'s curve starts after its warm start (the first 40 evaluations are not recorded).}
+\label{fig:convsaga}
+\end{figure}
+
+\paragraph{Behaviour of one run.} Figure~\ref{fig:gagen} follows the \ac{GA} run with the median
+result on Eros 10\,d (case A1). The population mean improves quickly in the first 15 generations,
+while the diversity (spread of the genes) falls from 0.31, the value of a random population, to
+about 0.05: the population concentrates on one region and then refines it. The fleet sizes in the
+population stay mixed (two to four spacecraft) for most of the run; only in the last generations
+does the population settle on two spacecraft.
+
+\paragraph{Which operator produces the improvements.} Over all 45 case-study runs, the new best
+designs came from blend crossover in 73\,\% of the cases, from slot swaps in 18\,\% and from
+mutation in 9\,\% (the initial random designs excluded; Figure~\ref{fig:gagen}, right). Although
+blending is applied to only 30\,\% of the slot pairs, it is the operator that \emph{refines} orbits
+towards the optimum; swaps and mutation supply the combinations and the new values it works on.
+This is consistent with the parameter study, in which removing either the crossover or the mutation
+group made the \ac{GA} significantly worse.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{Figures/fig_ga_generations.png}
+\caption{The \ac{GA} run with the median result on Eros 10\,d, generation by generation: fitness,
+diversity of the genes, fleet sizes in the population; right: the operator that produced each new
+best design, over all 45 case-study runs.}
+\label{fig:gagen}
+\end{figure}
+
+%=====================================================================================
+\section{Harder tests: large body, short missions, larger budget}
+\label{sec:gahard}
+
+\paragraph{Hard cases H1--H3.} Table~\ref{tab:hard} and Figure~\ref{fig:hardbudget} (left) show the
+three hardest missions. The \ac{GA} has the lower mean fitness in all three, by 1.3--4\,\%, although
+none of the three differences is significant on its own. On the two 10-slot missions it images 5.6
+and 7.9 points more of Kleopatra than \ac{SA}. The 101-gene case H3 separates the algorithms most
+clearly. \ac{SA} starts from random designs with about ten of the twenty slots switched on and
+removes spacecraft one switch flip at a time; in three of its five runs it remained at 14--15
+spacecraft (standard deviation of $J$ 0.040), while the \ac{GA}, whose stratified start contains
+every fleet size from 1 to 20, found three to five spacecraft in every run (standard deviation 0.011).
+
+\begin{table}[htbp]
+\centering
+\caption{Hard cases H1--H3 (2000 evaluations, five seeds): mean fitness, coverage and fleet size;
+$p$: one-sided Mann--Whitney test that the \ac{GA} is better.}
+\label{tab:hard}
+\footnotesize
+\input{generated/tab_hard}
+\end{table}
+
+\paragraph{Larger budget L1--L3.} With 5000 instead of 2000 evaluations both algorithms improve, but
+the \ac{GA} 1.6 to 2.9 times more (Table~\ref{tab:budget}, Figure~\ref{fig:hardbudget}, right).
+Where \ac{SA} led at 2000 evaluations the gap shrinks from 0.007 to 0.002 (Eros 1\,d) and from
+0.008 to 0.005 (Kleopatra 12\,h); on the two-hour Eros mission, where the \ac{GA} already led,
+its advantage becomes significant ($p=0.048$).
+
+\begin{table}[htbp]
+\centering
+\caption{Mean fitness with 2000 and 5000 evaluations (same seeds); $p$: one-sided Mann--Whitney
+tests at 5000 evaluations (bold: $p<0.05$).}
+\label{tab:budget}
+\small
+\input{generated/tab_budget}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{Figures/fig_hard_budget.png}
+\caption{Left: hard cases H1--H3, best fitness of every run and mean. Right: the same seeds with a
+budget of 2000 (open markers) and 5000 evaluations (filled); the arrow joins the means.}
+\label{fig:hardbudget}
+\end{figure}
+
+%=====================================================================================
+\section{Comparison of SA and GA}
+\label{sec:sa-vs-ga}
+
+The two algorithms are compared with six performance indices, four of which are specific to the
+fleet problem (Table~\ref{tab:savsga}):
+\begin{enumerate}
+\item \textbf{Fitness $J$} (mean and spread over the seeds, one-sided Mann--Whitney test);
+\item \textbf{Coverage $C$} of the sunlit surface, the mission's actual product;
+\item \textbf{Resources $N\cdot T$} in spacecraft-days, what the mission occupies;
+\item \textbf{Convergence:} evaluations needed until the best fitness first reaches a target, the
+worse of the two algorithms' median final fitness;
+\item \textbf{Computing cost:} spacecraft actually simulated per run (\emph{tracks}, independent of
+the machine) and wall-clock time;
+\item \textbf{Reliability:} the standard deviation and the worst run over the seeds.
+\end{enumerate}
+
+\begin{table}[htbp]
+\centering
+\caption{\ac{SA} against \ac{GA} on the nine case studies (2000 evaluations, five seeds, means).
+Bold: significantly better ($p<0.05$). Evals to target: median evaluations until the best fitness
+reaches the worse of the two median final values.}
+\label{tab:savsga}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\input{generated/tab_sa_ga}
+\end{table}
+
+\begin{itemize}
+\item \textbf{Fitness.} \ac{SA} has the lower mean $J$ in eight of the nine cases, by 0.5--9.9\,\%
+(mean $J$ \saMeanJ{} against \gaMeanJ). The difference is significant in \saWins{} cases (Eros 1\,d
+with $N_{\max}=10$ and Kleopatra 3\,d) and within the seed-to-seed spread in the other \gaTies; the
+\ac{GA} is better on the two-hour Eros mission, the hardest of the nine.
+\item \textbf{Coverage and resources.} The \ac{GA} sends more spacecraft in all nine cases (by 0.2 to
+1.0 on average) and reaches equal or higher coverage in six. Its slightly higher $J$ is the fleet cost
+of these extra spacecraft, not worse imaging. The forced-size study V6 showed that the fitness is
+nearly flat between two and four spacecraft, so both choices lie in the same flat optimum; the
+Milestone~3 conclusion that \ac{SA} tends to send slightly too few spacecraft where the fitness is
+flat in $N$ is mirrored by the \ac{GA} sending slightly more.
+\item \textbf{Convergence.} \ac{SA} reaches the target in a median of 1.7 times fewer evaluations
+(range 0.9--2.3). This is the expected behaviour: a single chain improves from its first move,
+whereas the \ac{GA} spends its first generations exploring with whole populations.
+\item \textbf{Computing cost.} Per evaluation both algorithms simulate about one new spacecraft
+(1700--2000 tracks per 2000 evaluations with $N_{\max}=5$), so a run takes the same time (e.g.\ 729
+and 686\,s on Eros 10\,d). With $N_{\max}=10$ the \ac{GA} simulates up to 46\,\% more tracks, because
+its fleets are larger, and takes up to 24\,\% longer.
+\item \textbf{Reliability.} The \ac{GA}'s results vary less from seed to seed: the mean standard
+deviation of $J$ is 0.009 against 0.016 for \ac{SA}, its worst run is better than \ac{SA}'s worst in
+five of the nine cases, and at 101 genes (H3) its spread is a quarter of \ac{SA}'s.
+\end{itemize}
+
+\paragraph{Overall.} With the budget of 2000 evaluations, \ac{SA} is slightly better and about
+twice as fast on the standard missions. The \ac{GA} is statistically on a par with it in seven of
+nine cases, more reliable, better on all three of the hardest missions, robust at 101 genes where
+\ac{SA} gets stuck, and it profits more from a larger budget: with 5000 evaluations it closes the gap
+and becomes significantly better on the hardest Eros mission. The choice therefore depends on the
+problem: \ac{SA} for small budgets and moderate missions, the \ac{GA} for large fleets, very short
+missions and larger budgets.
+
+\paragraph{Recommendations for improvement.}
+\begin{itemize}
+\item \textbf{Hybrid \ac{GA}:} spend the last part of the budget on \ac{SA}-like local moves around
+the best design, combining the \ac{GA}'s exploration with \ac{SA}'s fine-tuning, the weakness seen
+in the convergence index.
+\item \textbf{Parallel evaluation:} the $P-n_e$ children of a generation are independent and can be
+simulated at the same time; on a multi-core machine the \ac{GA} would then be several times faster
+in wall-clock time, while \ac{SA}'s chain is inherently sequential.
+\item \textbf{Fleet-size-aware \ac{SA}:} start \ac{SA} from fleets of different sizes (as the
+\ac{GA}'s stratified start does) to avoid the large-fleet trap seen at 101 genes.
+\item \textbf{More seeds:} the tie-breaker showed that five seeds can mislead by about 0.01 in $J$;
+ten or more seeds per case would make the small differences between the algorithms decidable.
+\end{itemize}
