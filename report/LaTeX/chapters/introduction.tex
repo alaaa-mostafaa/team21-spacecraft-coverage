@@ -11,11 +11,13 @@ camera~\cite{dunham2002}.
 This project asks how a small fleet of \emph{cooperating} spacecraft should be designed so that
 together they photograph as much of an irregular body as possible, without spending more
 spacecraft, energy or mission time than needed. Milestone~2 reviewed the literature and
-formulated the problem. This milestone (Milestone~3) implements \acf{SA} for it, applies it to
-case studies of increasing size and difficulty, and validates the results.
+formulated the problem. Milestone~3 implemented \acf{SA} for it, applied it to case studies of
+increasing size and difficulty, and validated the results. This milestone (Milestone~4) adds a
+\acf{GA} on the same pipeline, validates it in the same way and compares it with \ac{SA}. The
+Milestone~3 chapters are kept, updated to the final code, because the \ac{GA} is measured against them.
 
 \section{Objectives}
-The objectives of this milestone, following the project brief, are:
+The objectives of Milestones~3 and~4, following the project brief, are:
 \begin{enumerate}
 \item Finalise the problem formulation (problem statement, decision variables, constraints and
 fitness) and implement it as a modular simulation pipeline (Chapters~\ref{ch:method}
@@ -29,6 +31,9 @@ against results from the literature, and with independent checks of its decision
 (Chapter~\ref{ch:validation}).
 \item Report and discuss the results of every case study, and analyse the performance of the
 algorithm and the effect of its parameters (Chapter~\ref{ch:results}).
+\item \textbf{Milestone~4:} implement a \ac{GA} with a problem-specific chromosome, selection,
+crossover and mutation (Chapter~\ref{ch:ga}), validate it, study its parameters, and compare it
+with \ac{SA} on the same case studies and budgets (Chapter~\ref{ch:garesults}).
 \end{enumerate}
 
 \section{What changed since Milestone 2}
@@ -49,5 +54,7 @@ Chapter~\ref{ch:method} gives the final problem formulation and Chapter~\ref{ch:
 simulation that evaluates it. Chapter~\ref{ch:sa} explains the \ac{SA} implementation,
 Chapter~\ref{ch:cases} the case studies, Chapter~\ref{ch:validation} the validation and
 Chapter~\ref{ch:results} the results and the analysis of the algorithm.
+Chapter~\ref{ch:ga} explains the \ac{GA} implementation and Chapter~\ref{ch:garesults} its
+validation, parameter study and comparison with \ac{SA}.
 Chapters~\ref{ch:conclusion} and~\ref{ch:future} conclude and outline the next milestones.
 Appendix~\ref{app:code} explains how to run the code.

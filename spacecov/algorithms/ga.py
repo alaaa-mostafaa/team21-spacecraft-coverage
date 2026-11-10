@@ -162,6 +162,15 @@ class GeneticAlgorithm(Algorithm):
                     w = int(i)
             if w != exclude or len(costs) == 1:
                 return w
+        # With k=1, repeated redraws can still select the excluded parent.  Pick
+        # the best alternative explicitly rather than silently mating an
+        # individual with itself when a second parent exists.
+        if w == exclude and len(costs) > 1:
+            alternatives = [i for i in range(len(costs)) if i != exclude]
+            w = alternatives[0]
+            for i in alternatives[1:]:
+                if better(costs[i], feas[i], costs[w], feas[w]):
+                    w = i
         return w
 
     # ------------------------------------------------------------------ crossover
@@ -196,8 +205,13 @@ class GeneticAlgorithm(Algorithm):
 
     # ------------------------------------------------------------------ helpers
     def _unique(self, problem: Problem, x: np.ndarray, seen: set, step: float, rng) -> np.ndarray:
-        """Mutate x again while it duplicates a design of the population or of this generation."""
-        for _ in range(10):
+        """Mutate x again while it duplicates a design of the population or generation.
+
+        Continuous chromosomes almost always become unique on the first retry;
+        the larger cap makes the behavior robust for small/discrete benchmark
+        spaces without changing the normal path.
+        """
+        for _ in range(50):
             if _key(x) not in seen:
                 break
             x = local_move(problem, x, step, rng, self.params.max_vars_per_move)
@@ -230,18 +244,33 @@ class GeneticAlgorithm(Algorithm):
         return xs
 
     @staticmethod
-    def diversity(X: np.ndarray, genome: _Genome) -> float:
-        """Mean spread of the genes, as a fraction of their range (uniform random population ~ 0.29).
-        Angles: 0.2887 (1 - R), R = length of the mean unit vector (0 when spread evenly)."""
-        ok = genome.span > 0
-        if len(X) < 2 or not np.any(ok):
+    def diversity(X: np.ndarray, genome: _Genome, problem: Problem) -> float:
+        """Mean spread of *active* genes as a fraction of their range.
+
+        Orbit genes in switched-off slots are dormant and must not make a
+        population look diverse after the active mission designs have already
+        converged.  Periodic genes use circular concentration rather than a
+        linear standard deviation.
+        """
+        if len(X) < 2:
             return 0.0
-        span = np.where(ok, genome.span, 1.0)
-        lin = X.std(axis=0) / span
-        ang = 2 * np.pi * X / span
-        R = np.hypot(np.cos(ang).mean(axis=0), np.sin(ang).mean(axis=0))
-        d = np.where(genome.periodic, 0.2887 * (1.0 - R), lin)
-        return float(d[ok].mean())
+        span = np.where(genome.span > 0, genome.span, 1.0)
+        active = np.asarray([problem.active_mask(x) for x in X], bool)
+        values = []
+        for j in range(X.shape[1]):
+            if genome.span[j] <= 0:
+                continue
+            mask = active[:, j]
+            if not np.any(mask):
+                continue
+            v = X[mask, j]
+            if genome.periodic[j]:
+                ang = 2 * np.pi * v / span[j]
+                R = float(np.hypot(np.cos(ang).mean(), np.sin(ang).mean()))
+                values.append(0.2887 * (1.0 - R))
+            else:
+                values.append(float(np.std(v) / span[j]))
+        return float(np.mean(values)) if values else 0.0
 
     # ------------------------------------------------------------------ run
     def run(self, problem: Problem, x0: np.ndarray | None = None,
@@ -255,6 +284,7 @@ class GeneticAlgorithm(Algorithm):
         n_e, n_c, n_m = split(P, p.elite_frac, p.crossover_frac)
         G = n_generations(p.max_evals, P, n_e)
         credit = {op: 0 for op in OP_NAMES}
+        operator_stats = {op: {"tried": 0, "feasible": 0, "improved": 0} for op in OP_NAMES}
         gen_stats: dict[str, list] = {k: [] for k in ("evals", "best", "mean", "feasible", "diversity",
                                                       "N_mean", "N_min", "N_max", "step")}
 
@@ -263,6 +293,9 @@ class GeneticAlgorithm(Algorithm):
             ev = rec.evaluate(x)
             improved = rec.best is ev and ev is not before
             credit[op] += int(improved)
+            operator_stats[op]["tried"] += 1
+            operator_stats[op]["feasible"] += int(ev.feasible)
+            operator_stats[op]["improved"] += int(improved)
             rec.report(x, ev, improved, None, {"generation": g, "operator": op, "step": step,
                                                "x_prev": parent if parent is not None else x})
             return ev
@@ -274,7 +307,7 @@ class GeneticAlgorithm(Algorithm):
             gen_stats["best"].append(rec.best.cost)
             gen_stats["mean"].append(float(costs[feas].mean()) if feas.any() else float("nan"))
             gen_stats["feasible"].append(float(feas.mean()))
-            gen_stats["diversity"].append(self.diversity(np.array(g_x), genome))
+            gen_stats["diversity"].append(self.diversity(np.array(g_x), genome, problem))
             ns = [genome.n_of(x) for x in g_x] if genome.n_slots else [0]
             gen_stats["N_mean"].append(float(np.mean(ns)))
             gen_stats["N_min"].append(float(min(ns)))
@@ -312,10 +345,13 @@ class GeneticAlgorithm(Algorithm):
                 a = self.tournament(costs, feas, rng)
                 b = self.tournament(costs, feas, rng, exclude=a)
                 c1, c2, blended = self.crossover(problem, genome, pop_x[a], pop_x[b], rng)
-                for c in (c1, c2):
+                # each child's own parent, for the move log: child 2 starts from B in A's slot
+                # order (alignment uses no random numbers, so this does not change the run)
+                b_parent = genome.align(pop_x[a], pop_x[b]) if p.align and genome.n_slots else pop_x[b]
+                for c, parent in ((c1, pop_x[a]), (c2, b_parent)):
                     if len(children) < n_c:
                         children.append((self._unique(problem, c, seen, step, rng),
-                                         OP_BLEND if blended else OP_SWAP, pop_x[a]))
+                                         OP_BLEND if blended else OP_SWAP, parent))
             for _ in range(n_m):                                 # mutation children
                 a = self.tournament(costs, feas, rng)
                 c = local_move(problem, pop_x[a], step, rng, p.max_vars_per_move)
@@ -337,6 +373,7 @@ class GeneticAlgorithm(Algorithm):
             "pop_size": P, "n_elite": n_e, "n_crossover": n_c, "n_mutation": n_m,
             "generations_planned": G, "generations_run": g + 1,
             "improvements_by_operator": {OP_NAMES[k]: v for k, v in credit.items()},
+            "operator_stats": {OP_NAMES[k]: dict(v) for k, v in operator_stats.items()},
             "generations": {k: np.array(v, float) for k, v in gen_stats.items()}})
 
 

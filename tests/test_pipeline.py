@@ -94,6 +94,16 @@ def test_fitness_terms(pipe):
     assert e.cost(1, 86400, 0.0, np.zeros(1), np.zeros(1)).J <= 1               # empty map: finite, <= 1
 
 
+def test_reference_normalization_does_not_saturate_above_ten_spacecraft(pipe):
+    e, cfg = pipe.engine, pipe.cfg
+    c10 = e.cost(10, cfg.t_min, e.a_star, np.zeros(10), np.zeros(10))
+    c20 = e.cost(20, cfg.t_min, e.a_star, np.zeros(20), np.zeros(20))
+    assert c10.Z == pytest.approx(1.0)
+    assert c20.Z == pytest.approx(2.0)
+    assert c20.E == pytest.approx(c10.E * 2.0)
+    assert c20.J > c10.J
+
+
 
 
 def test_engine_coverage_grows_with_time_and_fleet(pipe):

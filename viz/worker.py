@@ -124,7 +124,8 @@ class _EvalJob(QtCore.QThread):
 # Optimisation algorithms
 # ===========================================================================
 STEP_FIELDS = ("iteration", "temperature", "cost", "best_cost", "current_cost", "accepted", "feasible",
-               "C", "T_days", "N", "C_best", "T_best", "N_best", "C_cur", "T_cur", "N_cur", "p_accept", "dJ")
+               "C", "T_days", "N", "C_best", "T_best", "N_best", "C_cur", "T_cur", "N_cur", "p_accept", "dJ",
+               "generation", "operator")
 
 
 @dataclass
@@ -257,8 +258,14 @@ class _OptJob(QtCore.QThread):
                 buf.append((step.iteration, _num(ex.get("T")), step.cost, step.best_cost, cur["cost"],
                             _num(step.accepted), info["feasible"], info["C"], info["T_days"], info["N"],
                             best["C"], best["T_days"], best["N"], cur["C"], cur["T_days"], cur["N"],
-                            _num(ex.get("p_accept")), _num(ex.get("dJ"))))
+                            _num(ex.get("p_accept")), _num(ex.get("dJ")),
+                            _num(ex.get("generation")), _num(ex.get("operator"))))
                 slot, desc = pipe.space.describe_change(x_prev, step.x)
+                if self.name == "ga":
+                    from spacecov.algorithms.ga import OP_NAMES
+                    operator = OP_NAMES.get(int(ex.get("operator", -1)), "operator")
+                    verdict = "improved" if step.improved else "evaluated"
+                    desc = f"gen {int(ex.get('generation', 0))} · {operator} · {verdict} · {desc}"
                 if not step.evaluation.feasible:
                     desc += "  [infeasible: " + ", ".join(step.evaluation.report.violated) + "]"
                 descs.append(desc)

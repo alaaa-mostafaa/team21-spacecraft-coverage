@@ -80,7 +80,13 @@ def main():
         if step.improved or step.iteration % 100 == 0:
             b = step.best
             c = f"C {100 * b.result.C:5.1f} %" if b.result is not None else "rejected"
-            print(f"  eval {step.iteration:5d}  T {step.extra.get('T', float('nan')):.2e}  "
+            if "T" in step.extra:                                    # SA: temperature
+                where = f"T {step.extra['T']:.2e}"
+            elif "generation" in step.extra:                         # GA: generation
+                where = f"gen {int(step.extra['generation']):3d}"
+            else:
+                where = ""
+            print(f"  eval {step.iteration:5d}  {where:<10}  "
                   f"cost {step.cost:8.4f}  best {b.cost:.4f}  ({c}, {pipe.describe(step.best_x).split(' [')[0]})")
 
     print(f"running {name} with {algo.params}")

@@ -114,6 +114,23 @@ def test_tournament_prefers_feasible_then_lower_cost():
                for _ in range(20))
 
 
+def test_tournament_k_one_still_excludes_second_parent():
+    ga = GeneticAlgorithm(tournament_k=1)
+    rng = np.random.default_rng(4)
+    assert ga.tournament(np.array([0.1, 0.5]), np.array([True, True]), rng, exclude=0) == 1
+
+
+def test_diversity_ignores_dormant_slot_genes(small_pipe):
+    genome = _Genome(small_pipe)
+    base = fleet(small_pipe, 0.5, [(40, 30, 10, 20)])
+    a, b = base.copy(), base.copy()
+    # Slot 2 is switched off; changing its orbit must not count as active
+    # population diversity.
+    dormant = small_pipe.space.slot_index(1, "a")
+    b[dormant:dormant + 4] = [95.0, 170.0, 250.0, 330.0]
+    assert GeneticAlgorithm.diversity(np.array([a, b]), genome, small_pipe) == pytest.approx(0.0)
+
+
 def test_stratified_start_has_every_fleet_size_equally(small_pipe):
     ga = GeneticAlgorithm()
     xs = ga._initial(small_pipe, _Genome(small_pipe), 30, None, np.random.default_rng(0))
@@ -160,3 +177,25 @@ def test_ga_starts_from_a_given_design_and_respects_a_fixed_fleet(small_pipe):
     pipe = Pipeline(make_asteroid({"source": "eros", "faces": 1500}), cfg)
     r = make("ga", max_evals=80, seed=0).run(pipe)
     assert pipe.space.n_of(r.x_best) == 2
+
+
+@pytest.mark.parametrize("budget, P, eps", [(1000, None, 0.05), (777, 20, 0.05), (300, 30, 0.2), (45, 40, 0.05)])
+def test_generations_spend_the_budget_as_planned(budget, P, eps):
+    """P evaluations in generation 0, then P - n_e per generation (Eq. generations)."""
+    r = make("ga", max_evals=budget, pop_size=P, elite_frac=eps, seed=1).run(BenchmarkProblem("rastrigin", 5))
+    e = r.extra
+    per_gen = np.bincount(r.history["generation"].astype(int))
+    assert r.n_evals == budget and e["generations_run"] == e["generations_planned"] == len(per_gen)
+    assert per_gen[0] == e["pop_size"] and np.all(per_gen[1:-1] == e["pop_size"] - e["n_elite"])
+    assert 1 <= per_gen[-1] <= e["pop_size"] - (e["n_elite"] if len(per_gen) > 1 else 0)
+
+
+def test_binary_tournament_matches_the_rank_probabilities():
+    """Pr(rank r) = (2(P - r) + 1) / P^2 (report Eq. tournament)."""
+    P = 40
+    ga, rng = GeneticAlgorithm(tournament_k=2), np.random.default_rng(5)
+    wins = np.bincount([ga.tournament(np.arange(P, dtype=float), np.ones(P, bool), rng) for _ in range(100000)],
+                       minlength=P) / 100000
+    expected = (2 * (P - np.arange(1, P + 1)) + 1) / P ** 2
+    assert np.max(np.abs(wins - expected)) < 0.004
+

@@ -9,8 +9,9 @@
     T/T_max  mission duration chosen by the algorithm                            -> minimised
     A*       area that is sunlit at some time within T_max (the most that could be imaged)
 
-Every term lies in [0, 1] and the weights add to 1, so a feasible J lies in [0, 1]:
-0 = everything imaged instantly at no cost, 1 = the worst.  Coverage enters as 1 - C, not 1/C:
+    The reference fleet size is fixed, so Z and E may exceed 1 when N > n_ref; this deliberately
+    keeps larger fleets more expensive instead of making the penalty saturate.  Coverage enters as
+    1 - C, not 1/C:
 1/C is infinite for an empty map and makes the last percentages of coverage almost worthless.
 
 How the simulation is organised: every flying spacecraft is simulated on its own
@@ -122,7 +123,10 @@ class Engine:
     def cost(self, N: int, T: float, S_a: float, dv: np.ndarray, e_elec: np.ndarray) -> CostTerms:
         """Objectives and the weighted fitness J of a fleet of N spacecraft flying for T seconds."""
         cfg = self.cfg
-        n_ref = max(cfg.n_ref, N)
+        # Keep the reference fleet fixed.  Using max(cfg.n_ref, N) would make a 20-spacecraft
+        # fleet cost no more than a 10-spacecraft fleet when n_ref=10, removing the intended
+        # pressure to use a compact fleet in the hard N_max=20 experiments.
+        n_ref = cfg.n_ref
         C = S_a / self.a_star if self.a_star > 0 else 0.0
         Z = N * cfg.unit_cost() / (n_ref * cfg.unit_cost())
         E_dv = float(np.sum(dv) / (n_ref * cfg.dv_ref))

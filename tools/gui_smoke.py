@@ -2,6 +2,7 @@
 
     python tools/gui_smoke.py [outdir]
 """
+import os
 import sys
 import time
 from pathlib import Path
@@ -17,6 +18,9 @@ from viz.panels import DARK_QSS  # noqa: E402
 
 out = Path(sys.argv[1] if len(sys.argv) > 1 else "screenshots")
 out.mkdir(exist_ok=True)
+cache = Path(__file__).resolve().parents[1] / ".work" / "matplotlib"
+cache.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("MPLCONFIGDIR", str(cache))
 app = QtWidgets.QApplication(sys.argv)
 app.setStyle("Fusion")
 app.setStyleSheet(DARK_QSS)
@@ -133,6 +137,34 @@ print("SA best:", win.presenter.result.summary(), flush=True)
 assert win.presenter.evaluation.feasible and win.presenter.design.N <= 5
 win.timeline.set_time(12 * 3600)
 shot("after_sa")
+
+# short live genetic-algorithm run: verify generation-aware telemetry and the GA chart mode
+win.optimiser_panel.set_params("ga", {"max_evals": 300, "seed": 4, "pop_size": 20})
+assert win.optimiser_panel.params()["pop_size"] == 20
+win.run_optimiser("ga", win.optimiser_panel.params(), False)
+t0 = time.time()
+while len(win.sa_data) < 20 and time.time() - t0 < 120:
+    pump(0.2)
+pump(1.0)
+ga_log = win.optimiser_panel.log.toPlainText()
+assert "gen " in ga_log and ("crossover" in ga_log or "mutation" in ga_log), "GA log is empty"
+shot("ga_search_live")
+win.optimiser_panel.pause_btn.setChecked(True)
+pump(1.5)
+n_paused = len(win.sa_data)
+pump(1.5)
+assert len(win.sa_data) == n_paused, "GA search did not pause"
+win.optimiser_panel.pause_btn.setChecked(False)
+win.optimiser_panel.pace.setCurrentIndex(0)
+t0 = time.time()
+while win.sa_runner.running() and time.time() - t0 < 300:
+    pump(0.2)
+assert not win.sa_runner.running(), "GA optimiser did not finish"
+assert win.sa_result is not None and len(win.sa_data) >= 20
+wait_eval()
+assert win.presenter.evaluation.feasible and win.presenter.design.N <= 5
+print("GA best:", win.presenter.result.summary(), flush=True)
+shot("after_ga")
 
 for _ in range(3):
     key(Qt.Key_M)

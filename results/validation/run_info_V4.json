@@ -1,0 +1,37 @@
+{
+  "command": "experiments/validate.py --only V4 --seeds 5 --evals 2000 --workers 9",
+  "parts": [
+    "V4"
+  ],
+  "seeds": 5,
+  "evals": 2000,
+  "workers": 9,
+  "quick": false,
+  "started": "2026-11-10 19:31:22",
+  "_t0": 1794331882.0554721,
+  "git_branch": "main",
+  "git_commit": "19f212141fb9ca505e2f9de53caf90917e5e26c4",
+  "uncommitted_changes": true,
+  "python": "3.11.7",
+  "machine": "macOS-26.3.1-x86_64-i386-64bit",
+  "cpus": 8,
+  "packages": {
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "trimesh": "5.2.0",
+    "rtree": "1.4.1",
+    "embreex": "4.4.0.post1",
+    "pyvista": "0.44.2",
+    "pyvistaqt": "0.11.1",
+    "PyQt5": "5.15.11",
+    "matplotlib": "3.11.2",
+    "pytest": "9.2.0"
+  },
+  "threads_per_worker": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "finished": "2026-11-10 19:50:11",
+  "wall_seconds": 1130
+}

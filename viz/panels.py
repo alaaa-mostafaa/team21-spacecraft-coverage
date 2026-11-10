@@ -286,11 +286,11 @@ FIELD_HINTS = {
     "seed": ("random seed", 0, 1_000_000, 1),
     # GA
     "pop_size": ("population size P", 1, 5000, 10, "auto: 1.5·dim, 30-60"),
-    "stratified": ("start stratified over N (1) / uniform (0)", 0, 1, 1),
+    "stratified": ("stratified start over fleet size N", 0, 1, 1),
     "elite_frac": ("elite share ε", 0.0, 0.5, 0.025),
     "crossover_frac": ("crossover fraction χ", 0.0, 1.0, 0.05),
     "tournament_k": ("tournament size k", 1, 20, 1),
-    "align": ("align slots before crossover (1/0)", 0, 1, 1),
+    "align": ("align slots before crossover", 0, 1, 1),
     "p_blend": ("blend probability p_b", 0.0, 1.0, 0.05),
     "alpha_blend": ("BLX-α", 0.0, 1.0, 0.05),
     "blend_weight": ("fixed blend weight λ", 0.0, 1.0, 0.05, "random: BLX-α"),
@@ -310,15 +310,23 @@ class ParamsForm(QtWidgets.QWidget):
             default = f.default
             hint = FIELD_HINTS.get(f.name, (f.name, 0, 1e6, 1))
             label, lo, hi, step = hint[:4]
-            is_int = isinstance(default, int) or (default is None and "int" in str(f.type))
-            w = QtWidgets.QSpinBox() if is_int else QtWidgets.QDoubleSpinBox()
-            if is_int:
+            is_bool = isinstance(default, bool)
+            is_int = not is_bool and (isinstance(default, int) or (default is None and "int" in str(f.type)))
+            if is_bool:
+                w = QtWidgets.QCheckBox()
+                w.setText("enabled")
+            else:
+                w = QtWidgets.QSpinBox() if is_int else QtWidgets.QDoubleSpinBox()
+            if is_bool:
+                pass
+            elif is_int:
                 w.setRange(int(lo), int(hi))
             else:
                 w.setDecimals(6 if step < 1e-3 else 4 if step < 0.01 else 3)
                 w.setRange(float(lo), float(hi))
-            w.setSingleStep(step)
-            if default is None:
+            if not is_bool:
+                w.setSingleStep(step)
+            if default is None and not is_bool:
                 w.setSpecialValueText(hint[4] if len(hint) > 4 else "auto")
             lay.addRow(label, w)
             self.widgets[f.name] = (w, default is None)
@@ -327,13 +335,19 @@ class ParamsForm(QtWidgets.QWidget):
         defaults = dataclasses.asdict(self.params_cls())
         for name, (w, optional) in self.widgets.items():
             v = values.get(name, defaults[name])
-            w.setValue(w.minimum() if v is None else v)
+            if isinstance(w, QtWidgets.QCheckBox):
+                w.setChecked(bool(v))
+            else:
+                w.setValue(w.minimum() if v is None else v)
 
     def values(self) -> dict:
         out = {}
         for name, (w, optional) in self.widgets.items():
-            v = w.value()
-            out[name] = None if optional and v == w.minimum() else v
+            if isinstance(w, QtWidgets.QCheckBox):
+                out[name] = w.isChecked()
+            else:
+                v = w.value()
+                out[name] = None if optional and v == w.minimum() else v
         return out
 
 
@@ -348,7 +362,7 @@ class OptimiserPanel(QtWidgets.QWidget):
         lay = QtWidgets.QVBoxLayout(self)
         g, gl = _group("Algorithm")
         self.algo = QtWidgets.QComboBox()
-        names = {"sa": "Simulated annealing", "random": "Random search (baseline)"}
+        names = {"sa": "Simulated annealing", "ga": "Genetic algorithm", "random": "Random search (baseline)"}
         for a in algorithms.available():
             self.algo.addItem(names.get(a, a), a)
         gl.addWidget(self.algo)
@@ -358,7 +372,9 @@ class OptimiserPanel(QtWidgets.QWidget):
         form = QtWidgets.QFormLayout()
         self.start_from = QtWidgets.QComboBox()
         self.start_from.addItem("random designs", False)
-        self.start_from.addItem("current design", True)
+        self.start_from.addItem("initial design (before any run)", True)
+        self.start_from.setToolTip("Every run starts fresh: from random designs, or from the design you loaded "
+                                   "or edited. A previous SA / GA result is never used as the start.")
         form.addRow("start from", self.start_from)
         gl.addLayout(form)
         self.algo.currentIndexChanged.connect(lambda _: self._build_form({}))
@@ -387,11 +403,22 @@ class OptimiserPanel(QtWidgets.QWidget):
         self.pause_btn.toggled.connect(self._on_pause)
         row.addWidget(self.pause_btn)
         gl.addLayout(row)
+        self.run_progress = QtWidgets.QProgressBar()
+        self.run_progress.setRange(0, 1)
+        self.run_progress.setValue(0)
+        self.run_progress.setFormat("%v / %m evaluations")
+        self.run_progress.setMaximumHeight(16)
+        self.run_progress.setVisible(False)
+        gl.addWidget(self.run_progress)
         self.status = _note("")
         gl.addWidget(self.status)
+        self.population = _note("")
+        self.population.setTextFormat(Qt.RichText)
+        self.population.setVisible(False)
+        gl.addWidget(self.population)
         lay.addWidget(g)
 
-        g, gl = _group("Move log  (every design the algorithm proposes and what it decided)")
+        g, gl = _group("Search log  (what the algorithm is trying)")
         self.log = QtWidgets.QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setMaximumBlockCount(500)
@@ -402,14 +429,8 @@ class OptimiserPanel(QtWidgets.QWidget):
         self.log.setFont(font)
         gl.addWidget(self.log)
         lay.addWidget(g)
-        lay.addWidget(_note(
-            "<b>Loop:</b> Algorithm → Feasibility → Engine → cost → Algorithm. A design that breaks a "
-            "constraint is rejected before the engine runs.<br><br>"
-            "<b>Simulated annealing move:</b> change 1-2 of the variables that matter now (N, T, or "
-            "a / ι / Ω / M₀ of a flying spacecraft) by a Gaussian step (σ = step × range, shrinking as T "
-            "falls); N moves by whole spacecraft. Angles wrap at 360°, the rest reflect at their bounds. "
-            "Better designs are always accepted, worse ones with probability exp(−ΔF/T). Only the "
-            "spacecraft whose orbit changed is re-simulated."))
+        self.help = _note("")
+        lay.addWidget(self.help)
         lay.addStretch(1)
         self._build_form({})
 
@@ -420,6 +441,29 @@ class OptimiserPanel(QtWidgets.QWidget):
         self.form = ParamsForm(algorithms.get(self.algorithm()).Params)
         self.form.set_values(values)
         self.form_box.addWidget(self.form)
+        self._update_mode_help()
+
+    def _update_mode_help(self):
+        if self.algorithm() == "ga":
+            self.population.setVisible(True)
+            self.help.setText(
+                "<b>GA loop:</b> evaluate a population → keep the elites → pick parents by tournament → "
+                "make crossover and mutation children → repair them and re-mutate duplicates → "
+                "evaluate → next generation.<br><br>"
+                "<b>Genome:</b> mission time plus one orbit slot per spacecraft. Slot alignment keeps "
+                "the same spacecraft together when two parents cross over. Lower <i>J</i> is better; "
+                "feasible designs always beat infeasible designs.")
+        elif self.algorithm() == "sa":
+            self.population.setVisible(False)
+            self.help.setText(
+                "<b>Loop:</b> Algorithm → Feasibility → Engine → cost → Algorithm.<br><br>"
+                "<b>Simulated annealing:</b> change 1–2 active variables by a shrinking Gaussian step. "
+                "Better designs are always accepted; worse designs may be accepted early to escape local minima.")
+        else:
+            self.population.setVisible(False)
+            self.help.setText(
+                "<b>Random search:</b> sample repaired designs, evaluate them, and keep the best feasible result. "
+                "Use it as a baseline for comparing GA and simulated annealing.")
 
     def algorithm(self) -> str:
         return self.algo.currentData()
@@ -430,6 +474,7 @@ class OptimiserPanel(QtWidgets.QWidget):
         self.algo.setCurrentIndex(max(i, 0))
         self.algo.blockSignals(False)
         self._build_form(values)
+        self._update_mode_help()
 
     def params(self) -> dict:
         return self.form.values()
@@ -438,7 +483,14 @@ class OptimiserPanel(QtWidgets.QWidget):
         self.pause_btn.setText("Resume" if on else "Pause")
         self.pauseToggled.emit(on)
 
+    def set_progress(self, done: int, total: int):
+        self.run_progress.setVisible(True)
+        self.run_progress.setRange(0, max(total, 1))
+        self.run_progress.setValue(min(done, max(total, 1)))
+
     def set_running(self, on: bool):
+        if on:
+            self.set_progress(0, 1)
         self.run_btn.setEnabled(not on)
         self.stop_btn.setEnabled(on)
         self.pause_btn.setEnabled(on)
@@ -605,27 +657,6 @@ class ViewPanel(QtWidgets.QWidget):
         self.mode.blockSignals(False)
 
 
-# =========================================================================== Metrics
-class MetricsPanel(QtWidgets.QGroupBox):
-    def __init__(self, parent=None):
-        super().__init__("Cost && constraints (displayed design)", parent)
-        lay = QtWidgets.QVBoxLayout(self)
-        self.label = QtWidgets.QLabel()
-        self.label.setTextFormat(Qt.RichText)
-        self.label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-        self.label.setWordWrap(True)
-        lay.addWidget(self.label)
-        self.progress = QtWidgets.QProgressBar()
-        self.progress.setRange(0, 100)
-        self.progress.setTextVisible(True)
-        self.progress.setFormat("evaluating mission  %p%")
-        self.progress.hide()
-        lay.addWidget(self.progress)
-
-    def set_html(self, html):
-        self.label.setText(html)
-
-
 DARK_QSS = """
 QWidget { background: #10131f; color: #dfe6f5; font-size: 12px; }
 QGroupBox { border: 1px solid #2a3150; border-radius: 6px; margin-top: 14px; padding-top: 6px; }
@@ -642,8 +673,18 @@ QSlider::handle:horizontal { background: #7aa2ff; width: 12px; margin: -5px 0; b
 QTabWidget::pane { border: 1px solid #2a3150; }
 QTabBar::tab { background: #161a2c; padding: 6px 10px; border: 1px solid #2a3150; }
 QTabBar::tab:selected { background: #24305a; color: #ffffff; }
-QProgressBar { border: 1px solid #2a3150; border-radius: 3px; text-align: center; }
-QProgressBar::chunk { background: #3a6ad0; }
+QProgressBar { border: 1px solid #2a3150; border-radius: 3px; text-align: center; font-size: 11px;
+    background: #151a2b; }
+QProgressBar::chunk { background: #2a78d6; border-radius: 2px; }
+QToolButton { background: #1d2440; border: 1px solid #34406c; border-radius: 4px; padding: 1px 6px;
+    color: #9aa8c8; font-size: 11px; }
+QToolButton:checked { background: #2c3f7a; color: #ffffff; }
+QToolTip { background: #0e1222; color: #e8eeff; border: 1px solid #2a3150; padding: 4px; }
+QTabBar::tab:hover { background: #1d2440; }
+QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover { border-color: #4a5a90; }
+QScrollBar:vertical { background: #10131f; width: 10px; }
+QScrollBar::handle:vertical { background: #2a3150; border-radius: 4px; min-height: 24px; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 QToolBar { background: #0c0f1a; border-top: 1px solid #2a3150; spacing: 6px; }
 QStatusBar { background: #0c0f1a; color: #9aa8c8; }
 QScrollArea { border: none; }

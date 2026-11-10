@@ -8,8 +8,9 @@ a vector describes a mission that may fly; the \emph{engine} simulates feasible 
 returns $J$. A design that fails a pre-engine check never reaches the (expensive) engine and
 receives the penalised cost~(\ref{eq:penalty}) directly. Because the algorithm only relies on a
 small \texttt{Problem} interface (bounds, variable kinds, \texttt{repair}, \texttt{evaluate}),
-the same \ac{SA} code also runs on standard benchmark functions (validation V2), and the
-algorithms of later milestones (GA, PSO) plug into the same pipeline through a registry.
+the same \ac{SA} code also runs on standard benchmark functions (validation V2), and further
+algorithms plug into the same pipeline through a registry: the \ac{GA} of this milestone
+(Chapter~\ref{ch:ga}) and \ac{PSO} later.
 
 \begin{figure}[htbp]
 \centering

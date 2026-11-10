@@ -18,11 +18,12 @@ angles, start from a population stratified over the fleet size, and reuse SA's m
 A parameter study of 23 settings confirmed every default (population 40 or 60, 5\,\% elites, crossover
 fraction 0.8, binary tournament, blend probability 0.3) and showed that both crossover and mutation are
 needed and that midpoint averaging is the worst choice ($p=0.004$).
-The GA finds the known optima of benchmark functions in every run, reproduces the 98\,\% literature
-coverage of Eros, and beats random search in every case. On nine case studies (26 or 51 genes,
-2000 evaluations, five seeds) SA is slightly better (mean fitness 0.266 against 0.273, significant in
-two cases) and converges about 1.7 times faster, while the GA is on a par in seven cases, varies half
-as much between runs, and sends slightly larger fleets with equal or higher coverage. On harder tests
-the ranking turns: the GA is better on all three short Kleopatra missions, keeps finding small fleets
-with 101 genes where SA gets stuck at 14--15 spacecraft, and with 5000 evaluations closes the gap and
-becomes significantly better on the hardest Eros mission ($p=0.048$).
+The GA finds the known optima of benchmark functions in every run and, under the assumptions of
+the literature, images \gaAllLitC\,\% of Eros (100\,\% reported there with a simpler visibility model).
+On nine case studies (26 or 51 genes, 2000 evaluations, five seeds) SA is slightly better (mean
+fitness \saMeanJ{} against \gaMeanJ, significant in \saWins{} cases), while the GA is on a par in
+\gaTies{} cases, varies less between runs and has the lower mean fitness on the two-hour Eros
+mission; with 5000 evaluations it becomes significantly better there ($p=0.048$). On a matched
+51-gene Eros case (1200 evaluations, three seeds) SA reaches $J=\saMatchedJ$ against
+$J=\gaMatchedJ$ for the GA, with mean coverage of \saMatchedC\,\% against \gaMatchedC\,\%. All final
+designs are feasible; hybrid local refinement is the clearest route to improving the GA.

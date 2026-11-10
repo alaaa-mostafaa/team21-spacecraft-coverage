@@ -392,24 +392,23 @@ class Presenter:
     def banner_text(self) -> str:
         """The live coverage number shown big at the top of the 3D view."""
         c = self.coverage_now()
-        clock = f"t = {self.t / 3600:.1f} h of T = {self.duration / 3600:.1f} h"
+        clock = f"t {self.t / 3600:.1f} / {self.duration / 3600:.1f} h"
         if c is None:
             return f"evaluating mission ...   {clock}"
         r = self.result
-        tail = f"(will reach {100 * r.C:.1f} % by the end, T = {self.design.T_days:.2f} d)"
+        tail = f"final {100 * r.C:.1f} %"
         if self.evaluation is not None and not self.evaluation.feasible:
-            tail += "   INFEASIBLE"
-        return (f"IMAGED {100 * c:.1f} % of the sunlit area ({c * r.a_star:.0f} / {r.a_star:.0f} km2)"
-                f"    {clock}    {tail}")
+            tail += "  -  INFEASIBLE"
+        return (f"IMAGED {100 * c:.1f} % of the sunlit area  ({c * r.a_star:.0f} / {r.a_star:.0f} km\u00b2)"
+                f"   \u00b7   {clock}   \u00b7   {tail}")
 
     def hud_text(self) -> str:
         ast, cfg = self.display, self.cfg
         dx, dy, dz = self.asteroid_dims()
         rev = self.t / (cfg.p_rot_h * 3600)
-        lines = [f"{ast.name}  {ast.n_facets} plates, extent {dx:.1f} x {dy:.1f} x {dz:.1f} km, "
-                 f"area {ast.total_area:.0f} km2   spin {cfg.p_rot_h:g} h   N = {self.fleet.n}   "
-                 f"{self.frame} frame   (everything to true scale)",
-                 f"{self.mission_clock()}   t = {self.t / 3600:5.1f} h of {self.duration / 3600:g} h   "
+        lines = [f"{ast.name}   {dx:.1f} x {dy:.1f} x {dz:.1f} km   {ast.total_area:.0f} km\u00b2   "
+                 f"spin {cfg.p_rot_h:g} h   {self.frame} frame, true scale",
+                 f"{self.mission_clock()}   t {self.t / 3600:5.1f} / {self.duration / 3600:.1f} h   "
                  f"asteroid turned {rev:4.2f} rev"]
         r = self.result
         r_now = self._r_now
@@ -417,7 +416,7 @@ class Presenter:
         sun = cfg.sun_inertial
         for i, s in enumerate(self.fleet.spacecraft):
             d = float(np.linalg.norm(r_now[i]))
-            now = f"   imaging {self.imaged_km2[i]:5.1f} km2" if i < len(self.imaged_km2) else ""
+            now = f"   imaging {self.imaged_km2[i]:5.1f} km\u00b2" if i < len(self.imaged_km2) else ""
             r_in = self._r_inertial_now[i]
             proj = float(r_in @ sun)
             dark = proj < 0 and np.linalg.norm(r_in - proj * sun) < cfg.eclipse_radius_km
@@ -425,12 +424,49 @@ class Presenter:
             if r is not None and not self.stale and i < len(r.soc) and k < r.soc.shape[1]:
                 power = f"   battery {100 * r.soc[i, k]:3.0f} %"
             power += "  ECLIPSE" if dark else ""
-            sc_ = cfg.scanners[s.type]
-            lines.append(f"SC{i + 1}  {sc_.name} {sc_.fov_deg:g} deg (usable to {cfg.max_range(s.type):.0f} km)"
-                         f"   r {d:5.1f} km   v {1000 * s.speed(d, cfg.mu):4.2f} m/s"
+            lines.append(f"SC{i + 1}   r {d:5.1f} km   v {1000 * s.speed(d, cfg.mu):4.2f} m/s"
                          f"   period {s.period(cfg.mu) / 3600:4.1f} h{now}{power}")
-        lines.append(f"spacecraft are {SPACECRAFT_SPAN_M:g} m across - dots and labels are screen markers")
+        sc_ = cfg.scanners[self.fleet.spacecraft[0].type] if self.fleet.n else None
+        cam = f"{sc_.name} camera {sc_.fov_deg:g}\u00b0, usable to {cfg.max_range(self.fleet.spacecraft[0].type):.0f} km   " \
+            if sc_ is not None else ""
+        lines.append(f"{cam}spacecraft are {SPACECRAFT_SPAN_M:g} m across: dots and labels are screen markers")
         return "\n".join(lines)
+
+    def metrics_data(self) -> dict | None:
+        """The numbers behind the metrics dashboard (None while the mission is evaluating)."""
+        r, cfg, ev = self.result, self.cfg, self.evaluation
+        if r is None or self.stale:
+            return None
+        c = r.cost
+        w_c, w_z, w_e, w_t = cfg.weights
+        feasible = ev is None or ev.feasible
+        checks = []
+        if ev is not None:
+            for name in PRE_CHECKS + POST_CHECKS:
+                v = ev.report.violations.get(name)
+                if v is not None:
+                    checks.append((LABELS.get(name, name), float(v)))
+        A = self.asteroid.areas
+        seen = r.first_seen < len(r.times)
+        fleet = [dict(name=f"SC{i + 1}", color=colors.sc_color_hex(i),
+                      alone=float((A * seen[i]).sum() / r.a_star), a=o.a, inc=o.inc,
+                      dv=1000 * float(r.dv[i]), frames=int(r.n_img[i]))
+                 for i, o in enumerate(self.design.orbits) if i < len(seen)]
+        sep = ev.report.min_separation if ev is not None else float("nan")
+        return dict(
+            J=float(c.J if feasible else ev.cost), feasible=feasible,
+            C=float(c.C), S_a=float(r.S_a), a_star=float(r.a_star),
+            N=int(r.N), n_max=int(cfg.n_max), T_days=r.T / 86400, t_max_days=float(cfg.t_max_days),
+            terms=[("coverage missed", w_c * (1 - c.C), f"{w_c:g} × (1 − C) = {w_c:g} × {1 - c.C:.3f}"),
+                   ("fleet cost", w_z * c.Z, f"{w_z:g} × Z = {w_z:g} × {c.Z:.3f}  ({r.N} spacecraft)"),
+                   ("energy", w_e * c.E, f"{w_e:g} × E = {w_e:g} × {c.E:.3f}  "
+                                         f"(½ ΔV {c.E_dv:.3f} + ½ electric {c.E_elec:.3f})"),
+                   ("mission time", w_t * c.f_time, f"{w_t:g} × T/T_max = {w_t:g} × {c.f_time:.3f}")],
+            checks=checks, min_sep=float(sep), d_sep=float(cfg.d_sep),
+            low_batt=float(r.soc.min()), soc_min=float(cfg.soc_min),
+            camera=cfg.scanners[cfg.camera].name, dt_min=float(cfg.dt_min),
+            light=f"Sun lat {cfg.sun_lat_deg:g}°" if cfg.lighting else "lighting off",
+            fleet=fleet)
 
     def metrics_html(self) -> str:
         ok = "<span style='color:#5fd38a'>&#10003;</span>"

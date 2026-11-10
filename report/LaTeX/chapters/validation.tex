@@ -8,7 +8,8 @@ agree with the literature, its choice of fleet size must be the right one, and i
 be artefacts of the coarse model. Table~\ref{tab:valplan} lists the seven checks and the rest of the
 chapter reports them. All numbers are produced by \texttt{experiments/validate.py}; its full log,
 every run's best design and convergence curve, and the run settings are saved in
-\texttt{results/validation/}.
+\texttt{results/validation/}. The objective uses a fixed reference fleet of ten spacecraft, so
+fleets larger than ten remain penalised consistently across all cases.
 
 \begin{table}[htbp]
 \centering
@@ -32,7 +33,7 @@ V7 & finer mesh & Do the designs keep their coverage on a four times finer aster
 
 \section{V1: the simulator obeys physics}
 \label{sec:v1}
-An automated test suite (66 tests, run with every change of the code) checks the simulator against
+An automated test suite (90 tests, run with every change of the code) checks the simulator against
 hand calculations (Table~\ref{tab:v1}) and checks the pipeline itself: decoding and encoding of
 the decision vector, every constraint and the repair operator, the penalty, the fixed-$N$ mode,
 the cost terms, and the bookkeeping of the algorithms.
@@ -62,14 +63,14 @@ Eclipse behind the asteroid, battery drain & hand-computed cases & identical \\
 \section{V2: SA finds known optima}
 \label{sec:v2}
 Because the \ac{SA} code is generic, it can be run unchanged on standard test functions whose global
-minimum is known ($f=0$ at $\mathbf{x}=\mathbf{0}$): the smooth sphere function, the highly
-multi-modal Rastrigin function and the Ackley function, each in two and five dimensions
+minimum is known ($f=0$ at $\mathbf{x}=\mathbf{0}$): the smooth sphere function in five dimensions,
+and the highly multi-modal Rastrigin function and the Ackley function, each in two and five dimensions
 (Table~\ref{tab:v2}, 10 runs of 10\,000 evaluations each, default parameters).
 
 \input{generated/tab_v2}
 
-\ac{SA} reaches the global minimum of the smooth functions (sphere, Ackley) in every run, in two and
-five dimensions. The Rastrigin function has a regular grid of local minima around the global one: in two dimensions 9 of 10 runs reach it, in five
+\ac{SA} reaches the global minimum of the smooth functions in every run: the sphere function in five
+dimensions and the Ackley function in two and five. The Rastrigin function has a regular grid of local minima around the global one: in two dimensions 9 of 10 runs reach it, in five
 dimensions 7 of 10, and the other runs end in a neighbouring local minimum (mean 0.47, i.e.\ about
 half a unit above the optimum). This is the expected behaviour of a single-point method with a
 finite budget on a deceptive landscape, and it shows that the algorithm is implemented correctly:
@@ -178,20 +179,22 @@ $N=6$ are equal and $N=3$--$8$ lie within 0.015. Inside this flat region the cho
 almost a tie, and the free-$N$ \ac{SA} runs land in it: for Kleopatra every run chose $N=3$, exactly
 the best forced size; for the two-day Eros mission the runs chose 2--4 spacecraft and the best of
 them ($J=0.1567$) is within 0.004 of the best forced design; for the six-hour mission they chose 2--5
-spacecraft (best $J=0.3382$, within 0.005 of the best forced $N=5$). The free runs tend to choose
+spacecraft (best $J=0.3382$, within 0.006 of the best forced $N=5$). The free runs tend to choose
 one or two spacecraft fewer than the forced optimum. Adding a spacecraft is a single move whose immediate
 effect is often negative (its orbit is still untuned, but it already costs $\Delta Z=0.1$), so near
 the end of the run, when the temperature is low, such moves are rarely accepted. The forced runs do
 not have to take this step. This is a known weakness of a single-point method on a variable-size
-problem; population-based methods (next milestones) may handle it better.
+problem; a population-based method that keeps several fleet sizes alive may handle it better
+(the \ac{GA} of Chapter~\ref{ch:ga} starts from a population stratified over the fleet size).
 
 \section{V7: finer asteroid model}
 \label{sec:v7}
 The search uses a 1\,499-facet copy of the Eros model for speed. Every best Eros design of cases A,
-C, D and E was re-simulated on a 6\,000-facet copy.
+C, D and E, and of the random-search runs of V4, was re-simulated on a 6\,000-facet copy
+(\fineDesigns\ designs, \fineDesignsRandom\ of them from random search).
 
 On the finer model the coverage of the \fineDesigns\ re-checked designs is on average \fineMeanDC\
-percentage points lower (at most \fineMaxDC), and $J$ is 0.011 higher on average. The coarse mesh is
+percentage points lower (at most \fineMaxDC), and $J$ is \fineMeanDJ\ higher on average. The coarse mesh is
 therefore slightly optimistic, because its larger facets count as photographed as soon as their
 centre is, but the shift is small and nearly the same for every design (it does not change which
 designs are good). For the final numbers of a real mission the best designs should be re-evaluated
@@ -202,6 +205,6 @@ All seven checks pass. The simulator agrees with hand calculations (V1); \ac{SA}
 (V2); the problem leaves a lot to optimise (V3); \ac{SA} beats random search with the same budget in
 every setting and every run, with $p=0.004$ (V4); under the assumptions of the literature it reproduces
 the near-complete coverage reported there (V5); its fleet sizes lie in the flat optimum found by
-forcing $N$, exactly at the optimum for Kleopatra and within 0.005 for Eros, with a slight
+forcing $N$, exactly at the optimum for Kleopatra and within 0.006 for Eros, with a slight
 tendency to send too few spacecraft (V6); and its designs keep their coverage within a few points
 on a four times finer model (V7). All \nRuns\ final designs (193 validation runs and 55 runs of the parameter study) are feasible.

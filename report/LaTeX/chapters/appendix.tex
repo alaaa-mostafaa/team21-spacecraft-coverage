@@ -8,8 +8,9 @@
 \chapter{Running the Code}
 \label{app:code}
 
-The code is written in Python~3.10. It uses NumPy for all numerics (the \ac{SA} algorithm itself
-uses nothing else), \texttt{trimesh} with Embree for ray casting, SciPy only for the
+The code is written in Python~3 (3.9 or newer; the validated environment of
+\texttt{requirements-lock.txt} is Python~3.11). It uses NumPy for all numerics (the \ac{SA} and
+\ac{GA} algorithms themselves use nothing else), \texttt{trimesh} with Embree for ray casting, SciPy only for the
 Mann--Whitney test of the validation, Matplotlib for charts, and PyVista with PyQt5 for the 3D
 viewer. Every command is run from the project folder with the launcher \texttt{sim}
 (\texttt{sim.bat} on Windows), which creates a virtual environment and installs
@@ -27,11 +28,15 @@ Command & What it does \\
 \texttt{./sim} & open the 3D viewer on the example design (optimiser available in the ``Optimiser'' tab) \\
 \texttt{./sim eval scenarios/orbital\_example.json} & print $J$, its terms and every constraint of a design \\
 \texttt{./sim optimise scenarios/orbital\_example.json --evals 2000 --seed 1 --body eros --n-max 5 --t-max 2 --save best.json} & run \ac{SA} without the viewer and save the best design \\
+\texttt{./sim optimise scenarios/orbital\_example.json --algorithm ga --evals 2000 --seed 1 --save best.json} & the same with the \ac{GA} (\texttt{--algorithm random}: random search) \\
 \texttt{./sim best.json} & open a saved design in the viewer \\
 \texttt{./sim validate --seeds 5 --evals 2000} & every case study and validation run of this report (V2--V7) \\
 \texttt{./sim validate --only P} & the parameter study (case E) \\
-\texttt{./sim test} & the 66 automated tests \\
-\texttt{python report/LaTeX/make\_assets.py} & rebuild every table and chart of this report from the results \\
+\texttt{./sim validate --only G2 GV4 GV5 GP H B} & the \ac{GA} validation, case studies, parameter study (case F), hard cases and budget sweep \\
+\texttt{./sim validate --only M NI} & the matched GA--SA comparison and the equal-native-iterations run (fixed seeds and budgets) \\
+\texttt{./sim test} & the 90 automated tests \\
+\texttt{python report/LaTeX/make\_assets.py} & rebuild the tables and charts of the \ac{SA} chapters from the results \\
+\texttt{python experiments/ga\_assets.py} & rebuild the tables, charts and quoted numbers of the \ac{GA} chapter \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -39,7 +44,9 @@ Command & What it does \\
 The validation writes to \texttt{results/validation/}: \texttt{run.log} (the console output, one
 line per run), \texttt{runs\_partial.jsonl} (every run as soon as it finishes), \texttt{raw.json}
 (all runs with their best decision vector and convergence curve), \texttt{summary.json} and one
-CSV file per part, and \texttt{run\_info.json} (command, git commit, machine, start and end time).
+CSV file per part, and \texttt{run\_info.json} (command, git commit, package versions, machine, start
+and end time of the latest run; a copy named after the parts run, e.g.\ \texttt{run\_info\_H\_M\_NI.json},
+is kept for every run).
 
 \chapter{Decision Vector Layout}
 \label{app:vector}

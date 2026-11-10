@@ -18,4 +18,12 @@ computed from the shape (polyhedron model) is the next step towards realism.
 centre of mass; a moving Sun and off-nadir pointing would add realism and decision variables.
 \item \textbf{Statistics.} Some forced-size cases use three runs; more runs would tighten the spreads
 and the $p$-values.
+\item \textbf{Reproducible validation.} Every change to the objective, constraints or mesh should
+trigger a regeneration of the comparison matrix with the same seeds and locked dependencies. The
+validation output should retain the git commit, package versions, mesh resolution, objective weights
+and reference fleet size alongside each result.
+\item \textbf{Sensitivity of the trade-off.} The fixed-reference normalization correctly penalises
+fleets larger than ten, but the preferred fleet still depends on the weights. A systematic sensitivity
+study, followed by a Pareto-front analysis, would quantify how robust the selected mission is to the
+relative value assigned to coverage, cost, energy and duration.
 \end{itemize}

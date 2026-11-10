@@ -79,4 +79,15 @@ Henry~B. Mann and Donald~R. Whitney.
   larger than the other.
 \newblock {\em The Annals of Mathematical Statistics}, 18(1):50--60, 1947.
 
+\bibitem{holland1975}
+John~H. Holland.
+\newblock {\em Adaptation in Natural and Artificial Systems}.
+\newblock University of Michigan Press, Ann Arbor, MI, 1975.
+
+\bibitem{goldberg1989}
+David~E. Goldberg.
+\newblock {\em Genetic Algorithms in Search, Optimization, and Machine
+  Learning}.
+\newblock Addison-Wesley, Reading, MA, 1989.
+
 \end{thebibliography}

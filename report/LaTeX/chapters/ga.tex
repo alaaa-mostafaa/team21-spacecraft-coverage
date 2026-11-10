@@ -297,9 +297,11 @@ sampling. It costs nothing: the orbits are drawn exactly as before.
 
 \paragraph{Feasibility of the start.} Every individual is drawn until it passes the pre-engine
 checks (radius band, duration and separation), at most 200 times, as \ac{SA}'s warm start does. A
-test on 200 random designs per fleet size showed that at least 93\,\% of them pass even with ten
-spacecraft (Eros, $T_{\max}$ from 6\,h to 10\,d), so the start is not biased towards small fleets by
-rejections.
+redraw keeps the fleet size of its group, so rejections cannot bias the start towards small fleets;
+they only reject orbits that come too close. Rejections are also rare: in a test on 400 random
+designs per fleet size (Eros), at least 93\,\% pass for every fleet size up to ten spacecraft when
+$T_{\max}\le2$\,d, and at least 97\,\% up to five spacecraft for $T_{\max}=10$\,d; only nine or ten
+spacecraft over 10\,d, with more time to drift close, fall to about 82\,\%.
 
 Both start types are compared in the parameter study.
 
@@ -314,8 +316,9 @@ Eq.~(\ref{eq:tournament}). For crossover, the second parent is drawn again until
 individual from the first, since crossing a design with itself only produces a copy.
 
 Tournament selection is used instead of fitness-proportional (roulette-wheel) selection because of
-the scale of the cost: a feasible design has $J\in[0,1]$, while a design that fails a constraint
-costs at least $10^3$ (Eq.~\ref{eq:penalty}). Roulette selection needs positive fitness values on a
+the scale of the cost: feasible designs normally have an objective of order one, while a design that
+fails a constraint costs at least $10^3$ (Eq.~\ref{eq:penalty}); fleets above the reference size may
+also have $J>1$. Roulette selection needs positive fitness values on a
 meaningful scale and would have to transform this cost; a tournament only compares two designs,
 so it is unaffected by the scale and applies the feasibility-first rule of \ac{SA} exactly. Its
 selection pressure is set by $k$ alone: a larger $k$ favours the best designs more strongly and
@@ -343,7 +346,8 @@ fraction of MATLAB's \texttt{ga}); Table~\ref{tab:split} gives the resulting gro
   \item \textbf{Crossover children} ($n_c$): two parents are chosen by tournament, their slots are
         aligned, and a child is assembled from the slots of both
         (Section~\ref{sec:ga-crossover}). If $n_c$ is odd, the last pair contributes one child.
-        A child identical to one of its parents is mutated, so that no evaluation is spent on a copy.
+        A child identical to a member of the population (e.g.\ one of its parents) is mutated, so
+        that no evaluation is spent on a copy.
   \item \textbf{Mutation children} ($n_m$): one parent is chosen by tournament, copied, and one or
         two of its active genes are changed: a Gaussian step on $T$, $a_i$, $\iota_i$, $\Omega_i$
         or $M_{0,i}$, or a flip of a switch $s_i$; the result is passed through \texttt{repair}.
@@ -562,7 +566,7 @@ average of an orbit that flies and one that does not has no meaning; the swap pa
 orbit to one child and the dormant one to the other, which is how crossover changes the fleet size.
 Finally both children are passed through \texttt{repair} (reflection of $a$, $\iota$ and $T$ at
 their bounds, which BLX-$\alpha$ can exceed, and wrapping of the angles), and a child identical to a
-parent is mutated.
+member of the population is mutated.
 
 \paragraph{Why the angles need Eq.~(\ref{eq:arc}).} The plain average of $350^\circ$ and $10^\circ$
 is $180^\circ$, the opposite direction, although the two nodes are only $20^\circ$ apart; the
@@ -589,8 +593,8 @@ spacecraft), so it contains on average $p_bN$ new orbits (Table~\ref{tab:pblend}
 $p_b=0.3\approx1/N$ gives about \emph{one} new orbit per child, which matches the mutation rate
 (about one changed gene per child) and the cost of one \ac{SA} move (one changed orbit, one new
 simulation), so that \ac{GA} and \ac{SA} also spend similar computing time per evaluation.
-The blend probability is a parameter of the study, and the best value found there replaces this
-default.
+The blend probability is a parameter of the study; a value found there replaces this default only
+if it is significantly better (Section~\ref{sec:gaparamstudy}).
 
 \begin{table}[htbp]
 \centering
@@ -627,7 +631,7 @@ expected behaviour & \multicolumn{1}{>{\centering\arraybackslash}p{2.4cm}}{no re
   \ENDIF
 \ENDFOR
 \STATE $\mathbf{c}^{(1)},\mathbf{c}^{(2)}\leftarrow\textsc{Repair}(\mathbf{c}^{(1)}),\textsc{Repair}(\mathbf{c}^{(2)})$
-\STATE mutate any child that equals one of its parents
+\STATE mutate any child that equals a member of the population (e.g.\ a parent)
 \RETURN $\mathbf{c}^{(1)},\mathbf{c}^{(2)}$
 \end{algorithmic}
 \end{algorithm}
@@ -757,9 +761,13 @@ infeasible designs the smaller violation wins, so the search is led back to the 
 The separation and battery constraints cannot be repaired by moving genes into their bounds and are
 handled by this penalty only.
 
-\paragraph{Duplicates.} The elites are distinct designs, and a child identical to one of its
-parents or to a child already created in the same generation is mutated again, so that no
-evaluation is spent on a design whose fitness is known.
+\paragraph{Duplicates.} The elites are distinct designs, and a child identical to a member of the
+current population (its parents included) or to a child already created in the same generation is
+mutated again, so that no evaluation is spent on a design whose fitness is in the population. Designs
+of older generations are not stored: a child can in principle recreate one, but on the fleet problem
+this did not happen once in 4500 evaluations (three runs of 1500); on the low-dimensional benchmark
+functions (validation V2), where uniform crossover can rebuild an ancestor gene by gene, it costs
+0.4--1.3\,\% of the budget.
 
 \paragraph{Termination.} The run stops when the evaluation budget $B$ is used, as for \ac{SA}; the
 last generation may be incomplete. No stall criterion is used, so both algorithms always spend the
@@ -804,7 +812,7 @@ Table~\ref{tab:gaparams} lists its parameters.
   \FOR{$n_m$ times}
     \STATE add \textsc{Repair}(\textsc{Mutate}(tournament winner, $\sigma_g$)) to $\mathcal{C}$ \hfill (1--2 active genes)
   \ENDFOR
-  \STATE mutate again every child that duplicates a parent or another child
+  \STATE mutate again every child that duplicates a member of the population or another child
   \STATE evaluate the children until the budget is used; update $\mathbf{x}^{*}$ (feasible first, then lower $J$)
   \STATE population $\leftarrow\mathcal{E}\cup\mathcal{C}$; \quad $g\leftarrow g+1$
 \ENDWHILE
@@ -858,7 +866,8 @@ Feasibility $\rightarrow$ Engine pipeline as \ac{SA}.}
 \begin{table}[htbp]
 \centering
 \caption{Parameters of the \ac{GA}: default values and the values compared in the parameter study
-(one parameter changed at a time; the best value of each becomes the default).}
+(one parameter changed at a time; a value replaces the default only if it is significantly better,
+Section~\ref{sec:gaparamstudy}).}
 \label{tab:gaparams}
 \footnotesize
 \begin{tabularx}{\textwidth}{@{}Xccl@{}}

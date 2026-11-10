@@ -5,8 +5,8 @@ Milestone~2 formulated the problem in two layers, a static layer (fixed spacecra
 orbital layer (spacecraft on Keplerian orbits). This milestone optimises the orbital layer only,
 with three changes agreed by the team: the mission duration $T$ becomes a decision variable
 instead of a constant, the number of spacecraft $N$ is decided by the optimiser, and every orbit
-is circular. This chapter gives the final formulation that the \ac{SA} algorithm of
-Chapter~\ref{ch:sa} solves. The simulation that turns a design into the quantities used here is
+is circular. This chapter gives the final formulation that both the \ac{SA} algorithm of
+Chapter~\ref{ch:sa} and the \ac{GA} of Chapter~\ref{ch:ga} solve. The simulation that turns a design into the quantities used here is
 described in Chapter~\ref{ch:orbital}.
 
 \section{Problem statement}
@@ -79,7 +79,7 @@ N=\sum_{i=1}^{N_{\max}}s_i,\qquad 1\le N\le N_{\max}.
 \label{eq:N}
 \end{equation}
 The orbit numbers of a switched-off slot are carried along unused. A fixed-length vector lets
-every algorithm (SA now, GA and PSO later) treat a design as one point in a box, while the
+every algorithm (SA and GA now, PSO later) treat a design as one point in a box, while the
 optimiser still decides the fleet size. With $N_{\max}=5$ the vector has 26 entries, with
 $N_{\max}=10$ it has 51.
 
@@ -108,7 +108,8 @@ the scanner type $t_i$ were removed (circular orbits, one camera for all spacecr
 $T$ and the switches $s_i$ were added.
 
 \section{Objectives}
-Four quantities describe a design; every one is normalised to $[0,1]$.
+Four quantities describe a design. Coverage and mission time lie in $[0,1]$; fleet cost and energy
+use a fixed ten-spacecraft reference and may exceed one for fleets larger than that reference.
 
 \textbf{Coverage $C$ (maximised).} Let $u_f=1$ if facet $f$ of area $A_f$ was photographed by
 at least one spacecraft within the mission, under all the image-quality rules of
@@ -126,7 +127,7 @@ Z=\frac{N\,(c_{\mathrm{bus}}+c_{\mathrm{cam}})}{n_{\mathrm{ref}}\,(c_{\mathrm{bu
 \label{eq:Z}
 \end{equation}
 A fixed reference (instead of $N_{\max}$) makes one spacecraft cost the same in every case
-study, so cases with different $N_{\max}$ are comparable.
+study, so cases with different $N_{\max}$ are comparable and oversized fleets remain penalised.
 
 \textbf{Energy $E$ (minimised).} Half propellant, half electricity:
 \begin{align}
@@ -144,16 +145,18 @@ energy $e_{\mathrm{tx}}$ to send it to Earth.
 \textbf{Mission time (minimised).} The duration enters as $T/T_{\max}$.
 
 \section{Fitness function}
-The four objectives are combined into one weighted fitness that \ac{SA} minimises:
+The four objectives are combined into one weighted fitness that both \ac{SA} and \ac{GA} minimise:
 \begin{equation}
 \boxed{\;J(\mathbf{x})=w_C\,(1-C)+w_Z\,Z+w_E\,E+w_T\,\frac{T}{T_{\max}}\;}
 \label{eq:J}
 \end{equation}
 with the weights $(w_C,w_Z,w_E,w_T)=(0.5,\,0.15,\,0.15,\,0.2)$.
 Coverage is the only maximised quantity; it enters as $1-C$, the share of the sunlit area that
-was missed, so maximising $C$ and minimising $1-C$ have the same optimum. The weights add to
-one, so every feasible design has $0\le J\le1$: $J=0$ would be the whole sunlit area imaged
-instantly at no cost and no energy. The form $1-C$ is used rather than $1/C$ because $1/C$ is
+was missed, so maximising $C$ and minimising $1-C$ have the same optimum. The weights add to one.
+For fleets no larger than the reference, the terms are in the usual unit range; for
+$N>n_{\mathrm{ref}}$, the fixed-reference cost and energy terms can exceed one by design. The ideal
+limiting interpretation $J=0$ would be the whole sunlit area imaged instantly at no cost and no
+energy. The form $1-C$ is used rather than $1/C$ because $1/C$ is
 infinite for a fleet that images nothing (common among random designs) and would make the last,
 hardest percentages of coverage almost worthless. With these weights one more spacecraft
 ($w_Z\Delta Z=0.015$, plus its share of the energy term) pays for itself only if it adds about
@@ -216,7 +219,7 @@ Parameter & Symbol & 433 Eros & 216 Kleopatra \\
 \midrule
 Gravitational parameter & $\mu$ & $4.463\times10^{-4}$\,km$^3$/s$^2$ & $0.1982$\,km$^3$/s$^2$ \\
 Rotation period & $P_{\mathrm{rot}}$ & 5.27\,h & 5.385\,h \\
-Shape model used in the search & --- & Gaskell, 1\,499 facets & radar, 4\,092 facets \\
+Shape model used in the search & --- & Gaskell, 1\,499 facets\textsuperscript{a} & radar, 4\,092 facets \\
 Farthest surface point & $R_{\max}$ & 17.6\,km & 114.2\,km \\
 Surface area & --- & 1\,124\,km$^2$ & 52\,186\,km$^2$ \\
 Orbit radius range & $r_{\min}$, $r_{\max}$ & 26.5 -- 100\,km & 171.2 -- 650\,km \\
@@ -237,6 +240,10 @@ Cost reference & $n_{\mathrm{ref}}$ & \multicolumn{2}{p{6.6cm}}{10 spacecraft} \
 Penalty & $J_0,\rho$ & \multicolumn{2}{p{6.6cm}}{$10^3$, $10^3$} \\
 \bottomrule
 \end{tabularx}
+\par\smallskip
+\parbox{\textwidth}{\scriptsize \textsuperscript{a}\,The matched GA--SA comparison of
+Section~\ref{sec:garesults} uses a 3\,000-facet copy; every final Eros design is re-checked on a
+6\,000-facet copy (validation V7).}
 \end{table}
 
 \section{Assumptions}

@@ -22,6 +22,11 @@
     B   budget sweep                   SA and GA with 5000 evaluations on three V4 settings (same seeds):
                                        does the GA catch up with a larger budget?
     SA vs GA (summary "SA_GA"): built from V4 (SA, random) + GV4 (GA) whenever both are present.
+    M   matched comparison             SA and GA with an equal budget of 1200 evaluations, seeds 0-2, on
+                                       Eros, N_max = 10, T_max = 10 d, 3000-facet search mesh
+    NI  equal native iterations        the M case with 20 GA generations (1143 evaluations) against an SA
+                                       budget of 20 evaluations; those 20 are all used by SA's warm start
+                                       (n_init = 20), so the SA side is the best of 20 random designs
 
 Adaptation to the current problem: the mission time T is a decision variable, so the Milestone 3 mission
 lengths become T_max (T is searched in [T_min, T_max], T_min = min(6 h, T_max / 4)).
@@ -30,6 +35,7 @@ lengths become T_max (T is searched in [T_min, T_max], T_min = min(6 h, T_max / 
     python experiments/validate.py --quick            # 2 seeds, small budgets: a pipeline check
     python experiments/validate.py --only V4 V6 --seeds 5 --evals 2000 --workers 11
     python experiments/validate.py --only G2 GP GV4 GV5 --seeds 5 --evals 2000     # the GA parts
+    python experiments/validate.py --only M NI          # fixed seeds and budgets (--seeds / --evals ignored)
 
 Outputs in results/validation/: <part>.csv, raw.json, summary.json and fig_*.png.
 """
@@ -46,6 +52,7 @@ import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
+from importlib import metadata as package_metadata
 
 import numpy as np
 
@@ -97,6 +104,10 @@ HARD = [("Kleopatra 6 h", "kleopatra", 10, 6 * H), ("Kleopatra 2 h", "kleopatra"
         ("Kleopatra 6 h, N_max 20", "kleopatra", 20, 6 * H)]
 # B (label of a V4 setting, budget): the same setting with a larger budget
 BUDGET = [("Eros 1 d", 5000), ("Eros 2 h", 5000), ("Kleopatra 12 h", 5000)]
+# M / NI (label, body, N_max, T_max in days, search mesh, seeds): the matched GA-SA comparison
+MATCHED = ("Eros 10 d, N_max 10, 3000 facets", "eros", 10, 10.0, {"source": "eros", "faces": 3000}, 3)
+MATCHED_EVALS = 1200
+NATIVE_ITERATIONS = 20          # GA generations (initial one included) and SA evaluations
 FREE_FOR_FIXED = {"Eros 2 d": ("eros", 10, 2.0), "Eros 6 h": ("eros", 10, 6 * H), "Kleopatra 3 d": ("kleopatra", 10, 3.0)}
 
 
@@ -113,6 +124,7 @@ class Job:
     lighting: bool = True
     fixed_n: bool = False
     params: dict = field(default_factory=dict)           # algorithm settings that differ from the defaults (P, GP)
+    mesh: dict | None = None                             # search mesh; None -> SEARCH_SHAPE[body]
     extra: dict = field(default_factory=dict)
 
 
@@ -125,16 +137,21 @@ def config_for(job: Job):
 
 def run_job(job: Job) -> dict:
     cfg = config_for(job)
-    pipe = Pipeline(make_asteroid(SEARCH_SHAPE[job.body]), cfg)
+    shape = job.mesh or SEARCH_SHAPE[job.body]
+    pipe = Pipeline(make_asteroid(shape), cfg)
     t0 = time.perf_counter()
     res = make(job.algo, max_evals=job.evals, seed=job.seed, **job.params).run(pipe)
     seconds = time.perf_counter() - t0
     b = res.best
     row = {"part": job.part, "label": job.label, "algo": job.algo, "body": job.body, "N_max": job.n_max,
            "T_max_days": job.t_max_days, "seed": job.seed, "lighting": job.lighting, "fixed_n": job.fixed_n,
+           "mesh_source": shape, "mesh_facets": pipe.asteroid.n_facets,
+           "weights": list(cfg.weights), "camera": cfg.camera, "dt_min": cfg.dt_min,
+           "occlusion": cfg.occlusion, "shadows": cfg.shadows, "n_ref": cfg.n_ref,
            "feasible": bool(b.feasible), "J": b.cost, "N": b.design.N, "T_days": b.design.T_days,
            "seconds": seconds, "evals": res.n_evals, "x_best": np.asarray(res.x_best).tolist(),
-           "curve_J": res.history["best_cost"].tolist(), "params": job.params,
+           # an SA run whose whole budget goes to its warm start (part NI) reports no step: no curve
+           "curve_J": res.history.get("best_cost", np.array([])).tolist(), "params": job.params,
            "T0": res.extra.get("T0"), "alpha_used": res.extra.get("alpha"), "stop": res.stop_reason,
            # computational cost independent of the machine: spacecraft actually simulated (cache misses)
            "tracks": pipe.engine.n_tracks, "engine_runs": pipe.engine.n_simulations, "rejected": pipe.n_rejected,
@@ -164,14 +181,23 @@ def run_all(jobs: list[Job], workers: int) -> list[dict]:
     partial = OUT / "runs_partial.jsonl"
     with ProcessPoolExecutor(max_workers=workers) as ex, partial.open("w", encoding="utf-8") as log:
         futs = {ex.submit(run_job, j): j for j in jobs}
+        failed = []
         for k, f in enumerate(as_completed(futs), 1):
-            r = f.result()
+            try:
+                r = f.result()
+            except Exception as exc:                      # keep the other runs; report and fail at the end
+                j = futs[f]
+                failed.append(f"{j.part} {j.label} {j.algo} seed {j.seed}: {exc!r}")
+                print(f"  [{k}/{len(jobs)}] FAILED {failed[-1]}", flush=True)
+                continue
             rows.append(r)
             log.write(json.dumps(r) + "\n")
             log.flush()
             print(f"  [{k}/{len(jobs)} {time.perf_counter() - t0:5.0f}s] {r['part']} {r['label']} {r['algo']} "
                   f"seed {r['seed']}: J {r['J']:.4f}  N {r['N']}  T {r['T_days']:.2f} d  "
                   f"C {100 * r.get('C', float('nan')):.1f} %", flush=True)
+    if failed:
+        raise RuntimeError(f"{len(failed)} runs failed (finished runs are in {partial}):\n" + "\n".join(failed))
     return rows
 
 
@@ -416,11 +442,18 @@ def run_info(a, parts) -> dict:
             return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True).stdout.strip()
         except OSError:
             return ""
+    packages = {}
+    for name in ("numpy", "scipy", "trimesh", "rtree", "embreex", "pyvista", "pyvistaqt", "PyQt5", "matplotlib", "pytest"):
+        try:
+            packages[name] = package_metadata.version(name)
+        except package_metadata.PackageNotFoundError:
+            packages[name] = None
     return {"command": " ".join(sys.argv), "parts": parts, "seeds": a.seeds, "evals": a.evals,
             "workers": a.workers, "quick": a.quick, "started": time.strftime("%Y-%m-%d %H:%M:%S"),
             "_t0": time.time(), "git_branch": git("rev-parse", "--abbrev-ref", "HEAD"),
             "git_commit": git("rev-parse", "HEAD"), "uncommitted_changes": bool(git("status", "--porcelain")),
             "python": platform.python_version(), "machine": platform.platform(), "cpus": os.cpu_count(),
+            "packages": packages,
             "threads_per_worker": {k: os.environ.get(k) for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
                                                                   "MKL_NUM_THREADS")}}
 
@@ -428,7 +461,8 @@ def run_info(a, parts) -> dict:
 def main():
     global OUT                                   # --out redirects every output file
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--only", nargs="*", choices=["V2", "V3", "V4", "V5", "V6", "P", "G2", "GV4", "GV5", "GP", "H", "B"],
+    ap.add_argument("--only", nargs="*",
+                    choices=["V2", "V3", "V4", "V5", "V6", "P", "G2", "GV4", "GV5", "GP", "H", "B", "M", "NI"],
                     help="parts to run (default: the SA parts V2-V6)")
     ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--evals", type=int, default=2000)
@@ -509,6 +543,20 @@ def main():
             for s in range(a.seeds):
                 for algo in ("sa", "ga"):
                     jobs.append(Job("B", label, body, n_max, t_max, s, algo, budget))
+    if "M" in parts or "NI" in parts:
+        label, body, n_max, t_max, mesh, n_seeds = MATCHED
+        if "M" in parts:
+            for s in range(n_seeds):
+                for algo in ("sa", "ga"):
+                    jobs.append(Job("M", label, body, n_max, t_max, s, algo, MATCHED_EVALS, mesh=mesh))
+        if "NI" in parts:
+            from spacecov.algorithms.ga import auto_pop_size, split
+            P = auto_pop_size(1 + 5 * n_max)
+            n_e = split(P, 0.05, 0.8)[0]
+            ga_evals = P + (NATIVE_ITERATIONS - 1) * (P - n_e)          # 20 generations: 60 + 19 x 57 = 1143
+            for s in range(n_seeds):
+                jobs.append(Job("NI", label, body, n_max, t_max, s, "ga", ga_evals, mesh=mesh))
+                jobs.append(Job("NI", label, body, n_max, t_max, s, "sa", NATIVE_ITERATIONS, mesh=mesh))
     if "GP" in parts:
         body, n_max, t_max = PARAM_CASE
         for label, params in GA_PARAM_STUDY:
@@ -549,6 +597,10 @@ def main():
     if any(r["part"] == "B" for r in raw):
         summary["B"] = summarise_algos([r for r in raw if r["part"] == "B"], [b[0] for b in BUDGET])
         write_csv(OUT / "B_budget.csv", summary["B"])
+    for part, name in (("M", "M_matched.csv"), ("NI", "NI_native_iterations.csv")):
+        if any(r["part"] == part for r in raw):
+            summary[part] = summarise_algos([r for r in raw if r["part"] == part], [MATCHED[0]])
+            write_csv(OUT / name, sorted([r for r in raw if r["part"] == part], key=lambda r: (r["seed"], r["algo"])))
     if any(r["part"] == "GV4" for r in raw):
         write_csv(OUT / "GV4_runs.csv", [r for r in raw if r["part"] == "GV4"])
         if any(r["part"] == "V4" for r in raw):
@@ -561,11 +613,14 @@ def main():
                          "max_abs_dC_points": 100 * float(d.max())}
     summary["all_final_designs_feasible"] = all(r["feasible"] for r in raw)
     summary["settings"] = {"seeds": a.seeds, "evals": a.evals, "quick": a.quick,
-                           "t_min_rule": "min(0.25 d, T_max / 4)", "check_mesh": CHECK_SHAPE}
+                           "t_min_rule": "min(0.25 d, T_max / 4)", "check_mesh": CHECK_SHAPE,
+                           "objective_weights": list(for_body("eros").weights), "n_ref": for_body("eros").n_ref,
+                           "normalization": "fixed n_ref; Z and E may exceed 1 when N > n_ref"}
     summary_path.write_text(json.dumps(summary, indent=2, default=str))
     info["finished"] = time.strftime("%Y-%m-%d %H:%M:%S")
     info["wall_seconds"] = round(time.time() - info["_t0"])
     (OUT / "run_info.json").write_text(json.dumps(info, indent=2))
+    (OUT / f"run_info_{'_'.join(parts)}.json").write_text(json.dumps(info, indent=2))   # kept per set of parts
     figures(raw, sat)
     print(json.dumps({k: v for k, v in summary.items() if k in ("V5", "V7", "all_final_designs_feasible")},
                      indent=2), flush=True)

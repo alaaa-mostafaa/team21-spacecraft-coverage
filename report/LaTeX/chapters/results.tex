@@ -141,11 +141,12 @@ $N$ (validation V6).
 
 \textbf{Computational cost.} Table~\ref{tab:cost} gives the time of one run on one CPU core. It grows
 with the number of time steps and facets, from a few seconds for a two-hour Eros mission to about
-3--4 minutes for ten days on Eros or three days on Kleopatra. It hardly depends on $N_{\max}$, because
+2--3 minutes for ten days on Eros or three days on Kleopatra. It hardly depends on $N_{\max}$, because
 a move changes at most two spacecraft and the unchanged ones are taken from the track cache. The same
 cache explains why random search, which simulates every spacecraft of every new design from scratch,
-is up to five times slower than \ac{SA} for the same number of evaluations (e.g.\ 7.1 against 2.9 minutes for
-ten days on Eros). The whole validation (193 runs) took about one hour on six cores.
+simulates 2.5 to 6 times more spacecraft tracks and is 1.9 to 4.4 times slower than \ac{SA} for the
+same number of evaluations (e.g.\ 5.8 against 2.6 minutes for ten days on Eros). The whole validation
+(193 runs) took about one hour on six cores.
 
 \section{Effect of the algorithm parameters}
 \label{sec:params}

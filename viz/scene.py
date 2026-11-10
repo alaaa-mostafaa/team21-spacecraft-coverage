@@ -147,8 +147,8 @@ class SceneManager:
         if not self.visible["axes"]:
             p.hide_axes()
         self.hud = p.add_text("", position="lower_left", font_size=9, color="#d8e4ff", name="hud")
-        self.hint = p.add_text("H help   mouse rotate/zoom   WASD fly   1-7 ride   F chase   Space play",
-                               position="lower_right", font_size=8, color="#7080a0", name="hint")
+        self.hud.SetMaximumFontSize(15)          # the corner annotation scales with the window
+        self._legend_actors: list = []
         self._setup_scale_bar()
         # big live coverage readout, top centre
         self.banner = vtk.vtkTextActor()
@@ -163,6 +163,8 @@ class SceneManager:
         self.banner.GetPositionCoordinate().SetCoordinateSystemToNormalizedViewport()
         self.banner.SetPosition(0.5, 0.985)
         p.renderer.AddActor2D(self.banner)
+        self._banner_px = 0.0                     # banner height in pixels after fitting
+        p.renderer.AddObserver("StartEvent", lambda *_: self._fit_overlays())
 
     # ------------------------------------------------------------------ km scale bar
     def _setup_scale_bar(self):
@@ -190,7 +192,7 @@ class SceneManager:
         tp = self._bar_text.GetTextProperty()
         tp.SetFontSize(13)
         tp.SetColor(0.85, 0.9, 1.0)
-        tp.SetJustificationToCentered()
+        tp.SetJustificationToRight()
         for a in (self._bar, self._bar_text):
             self.p.renderer.AddActor2D(a)
         self.p.renderer.AddObserver("StartEvent", lambda *_: self._update_scale_bar())
@@ -214,8 +216,8 @@ class SceneManager:
             P.SetPoint(i, x, y, 0)
         P.Modified()
         label = f"{length:g} km" if length >= 1 else f"{length * 1000:g} m"
-        self._bar_text.SetInput(f"{label}  (at the view centre)")
-        self._bar_text.SetPosition(x0 + px / 2, y0 + 8)
+        self._bar_text.SetInput(f"{label} at view centre")
+        self._bar_text.SetPosition(x0 + px, y0 + 8)
 
     # ------------------------------------------------------------------ asteroid
     def set_asteroid(self, ast: Asteroid):
@@ -387,33 +389,87 @@ class SceneManager:
         self.hud.SetText(0, text)        # CornerAnnotation: 0 = lower left
 
     def set_legend(self, mode: str):
-        """Colour key in the upper-right corner, one coloured text line per entry."""
-        for a in getattr(self, "_legend_actors", []):
+        """Colour key in the upper-left corner, one line per entry: a coloured block + its meaning.
+
+        Laid out in pixels by _fit_overlays, so lines never overlap at any window size."""
+        for a in self._legend_actors:
             self.p.renderer.RemoveActor2D(a)
         self._legend_actors = []
         entries = list(colors.LEGENDS.get(mode, [])) + (colors.FOOTPRINT_LEGEND if mode != "Natural" else [])
-        for j, (text, col) in enumerate(entries):
-            t = vtk.vtkTextActor()
-            t.SetInput(text)
-            tp = t.GetTextProperty()
-            tp.SetFontSize(14)
-            tp.SetColor(*(np.asarray(col) / 255.0))
-            tp.SetJustificationToRight()
-            tp.SetVerticalJustificationToTop()
-            tp.SetBackgroundColor(0.02, 0.03, 0.08)
-            tp.SetBackgroundOpacity(0.75)
-            t.GetPositionCoordinate().SetCoordinateSystemToNormalizedViewport()
-            t.SetPosition(0.99, 0.91 - 0.032 * j)
-            self.p.renderer.AddActor2D(t)
-            self._legend_actors.append(t)
+        for text, col in entries:
+            pair = []
+            for s, c in (("M", np.asarray(col) / 255.0), (text, (0.84, 0.88, 0.96))):
+                t = vtk.vtkTextActor()
+                t.SetInput(s)
+                tp = t.GetTextProperty()
+                tp.SetColor(*c)
+                tp.SetVerticalJustificationToTop()
+                if s == "M":                       # a solid colour block: glyph and background alike
+                    tp.SetBackgroundColor(*c)
+                    tp.SetBackgroundOpacity(1.0)
+                else:
+                    tp.SetShadow(True)
+                t.GetPositionCoordinate().SetCoordinateSystemToDisplay()
+                self.p.renderer.AddActor2D(t)
+                t.SetVisibility(self._help_actor is None)
+                pair.append(t)
+            self._legend_actors.append(pair)
+        self._legend_actors = [a for pair in self._legend_actors for a in pair]
+
+    def _text_width(self, actor, renderer=None) -> tuple[float, float]:
+        """Rendered (width, height) in pixels of a text actor at its current font size.
+
+        Measured from the text itself, so a string changed just before this render is exact."""
+        b = [0] * 4
+        dpi = self.p.ren_win.GetDPI() if self.p.ren_win is not None else 72
+        vtk.vtkTextRenderer.GetInstance().GetBoundingBox(actor.GetTextProperty(), actor.GetInput() or " ", b, dpi)
+        return float(b[1] - b[0]), float(b[3] - b[2])
+
+    def _fit_overlays(self):
+        """Size the banner to the view width and stack the legend below it (runs before each render)."""
+        ren = self.p.renderer
+        w, h = ren.GetSize()
+        if w < 50 or h < 50:
+            return
+        tp = self.banner.GetTextProperty()
+        if self.banner.GetInput():
+            tp.SetFontSize(20)
+            bw, bh = self._text_width(self.banner, ren)
+            size = int(max(9, min(20, 20 * 0.94 * w / max(bw, 1), h / 22)))
+            tp.SetFontSize(size)
+            self._banner_px = bh * size / 20
+        else:
+            self._banner_px = 0.0
+        if not self._legend_actors:
+            return
+        txt0 = self._legend_actors[1]
+        txt0.GetTextProperty().SetFontSize(10)
+        _, lh10 = self._text_width(txt0, ren)
+        size = int(max(7, min(16, 10 * (h / 32) / max(lh10, 1))))     # a line is ~1/32 of the view
+        for a in self._legend_actors:
+            a.GetTextProperty().SetFontSize(size)
+        _, lh = self._text_width(txt0, ren)
+        y = h - h * 0.015 - self._banner_px - 10
+        for k in range(0, len(self._legend_actors), 2):
+            sq, txt = self._legend_actors[k], self._legend_actors[k + 1]
+            sq.GetTextProperty().SetFontSize(max(5, int(size * 0.7)))
+            sq.SetPosition(12, y - 0.2 * lh)
+            txt.SetPosition(12 + 1.2 * lh, y)
+            y -= 1.35 * lh
+
+    def _set_overlays_visible(self, on: bool):
+        for a in [self.banner, *self._legend_actors]:
+            a.SetVisibility(on)
 
     def toggle_help(self, text: str) -> bool:
         if self._help_actor is not None:
             self.p.remove_actor(self._help_actor, render=False)
             self._help_actor = None
+            self._set_overlays_visible(True)
             return False
         self._help_actor = self.p.add_text(text, position="upper_right", font_size=9, color="#e8eeff",
                                            name="help")
+        self._set_overlays_visible(False)            # the help card replaces banner and legend
         self._help_actor.GetTextProperty().SetBackgroundColor(0.03, 0.04, 0.1)
         self._help_actor.GetTextProperty().SetBackgroundOpacity(0.85)
         return True

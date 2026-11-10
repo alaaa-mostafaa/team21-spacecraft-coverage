@@ -9,7 +9,7 @@ mission time**.
 ```
              x = [T, (a, ι, Ω, M₀, t) × N_max]
   Algorithm ──────────────────────────────▶ Feasibility ──(feasible design)──▶ Engine
-  (SA, ...)  ◀───────────── fitness J ─────── (rejected: penalty cost) ◀───── J(x)
+  (SA, GA, random)  ◀────── fitness J ─────── (rejected: penalty cost) ◀───── J(x)
 ```
 
 This merges our modular structure with the final Milestone 3 formulation (coverage / cost / energy
@@ -26,19 +26,27 @@ fitness, on/off slots, Kleopatra), with the mission time made a variable that is
 * **`spacecov/pipeline.py`**: chains Feasibility and Engine into the single `evaluate(x)` the
   algorithms call.
 * **`viz/`**: an interactive true-scale 3D viewer (PyVista + Qt) with live charts of the search.
-* **`spacecov/legacy/m3/`**: the final Milestone 3 code (frozen), which produced `results/` and
-  `report/`.
+* **`spacecov/legacy/m3/`**: the final Milestone 3 code (frozen), which produced the original `results/`
+  and `report/`; its SA-only experiment scripts are retained for historical reproducibility.
 * **`tests/`**: physics checks, the pipeline, the algorithms on benchmarks, the viewer logic, and the
   Milestone 3 tests (`tests/legacy/`).
+
+The current Milestone 4 code is everything under `spacecov/` and `viz/` outside `spacecov/legacy/m3/`.
+Generated validation tables and figures live under `results/validation/`; they should be regenerated
+with `experiments/validate.py` rather than edited by hand.
 
 ## Setup
 
 ```bash
 python -m venv .venv
 .venv/bin/pip install -r requirements.txt            # Windows: .venv\Scripts\pip install -r requirements.txt
+# For the validated report/benchmark environment:
+.venv/bin/pip install -r requirements-lock.txt
 ```
 
 `embreex` (installed automatically on 64-bit Windows/Linux) makes the ray casting 10–50× faster.
+The lock file records the versions used by the validated macOS environment; use it when reproducing
+benchmark numbers, and record the git commit shown in `results/validation/run_info.json`.
 
 ## Run
 
@@ -48,12 +56,16 @@ Windows (`sim.bat`) and Linux/macOS (`./sim`) take the same commands:
 sim                                       viewer on the example design
 sim my_scenario.json                      viewer on any scenario
 sim eval scenarios/orbital_example.json   cost and constraints only, no window
-sim optimise scenarios/orbital_example.json --evals 3000 --seed 1 --save best.json
+sim optimise scenarios/orbital_example.json --algorithm ga --evals 3000 --seed 1 --save best.json
 sim test                                  unit tests
 sim experiments                           Milestone 3 experiments (legacy)
 ```
 
-`optimise` also takes `--algorithm sa|random`, `--body eros|kleopatra`, `--n-max 7`, `--t-max 10` (days), `--from-design` (start from
+For the desktop integration smoke test, use a real OpenGL-capable desktop session:
+`python tools/gui_smoke.py .work/gui-smoke`. PyVista/VTK can segfault in Qt's headless
+`offscreen` platform, so the regular unit suite remains the headless-safe validation path.
+
+`optimise` also takes `--algorithm sa|ga|random`, `--body eros|kleopatra`, `--n-max 7`, `--t-max 10` (days), `--from-design` (start from
 the scenario's design), `--dt`, `--sun-lat`, `--no-occlusion` and `--no-lighting`. The best design
 written by `--save` opens in the viewer.
 
@@ -87,8 +99,9 @@ print(pipe.describe(result.x_best), result.best.summary())
 * **Coverage vs mission time (bottom left):** C(t) of the fleet and of each spacecraft alone, as % of
   the area that is ever sunlit. Click the chart to jump to that time.
 * **Search charts:** fitness J (candidates, current, best), coverage against mission time T of every
-  design tried, and the temperature. While the search runs, the 3D view shows the design it is on and
-  the orbit just proposed (green = accepted, red = rejected).
+  design tried, and an algorithm-specific progress chart. SA shows temperature and accepted/rejected
+  neighbors; GA shows generation/population spread and crossover or mutation children. While the
+  search runs, the 3D view shows the current candidate or best design.
 
 | Input | Action |
 |---|---|
@@ -134,9 +147,10 @@ with distances scaled to the body (orbits 171 … 650 km).
 | E | energy: ½ ΣΔV ÷ (10 · 3v₀) + ½ ΣE_elec ÷ (10 · E_ref); E_elec = 50 W · T + ~15 kJ per frame | minimise |
 | T / T_max | mission duration | minimise |
 
-* Every term lies in [0, 1] and the weights add to 1, so a feasible J lies in [0, 1]: 0 = everything
-  imaged instantly at no cost, 1 = the worst. Coverage enters as 1 − C, not 1/C: 1/C is infinite for an
-  empty map and makes the last percentages of coverage almost worthless.
+* The weights add to 1. Coverage enters as 1 − C, not 1/C: 1/C is infinite for an empty map and makes
+  the last percentages of coverage almost worthless. Fleet cost and energy use the fixed reference
+  fleet `n_ref = 10`, so they can exceed 1 when more than 10 spacecraft are selected; this deliberately
+  keeps larger fleets penalized instead of saturating their cost.
 * E already grows with T (the bus draws 50 W for the whole mission), so time is partly charged there too.
 * A facet counts as imaged at a step if (a) it is inside the camera cone, (b) the emission angle is
   ≤ 65°, (c) no terrain blocks the line of sight (ray casting), (d) the pixel on the ground is
@@ -218,14 +232,19 @@ repeat until the evaluation budget is used:
 * **Chromosome** = the decision vector: a gene is one number, a slot (5 genes) is one spacecraft.
 * **Slot alignment:** a fleet can be stored in N_max! slot orders, so B's slots are matched to A's
   (nearest orbit, angles on the circle) before crossover.
-* **Swap or blend** each aligned pair: swap the whole slot (probability 1 − p_b) or blend a pair of
-  flying slots with BLX-α (p_b = 0.3, ≈ one new orbit per child; angles along the shorter arc).
+* **Swap or blend** each aligned pair (and T): a pair in which both slots fly (and T) is blended with
+  BLX-α with probability p_b = 0.3 (≈ one new orbit per child; angles along the shorter arc);
+  otherwise each child takes the whole slot from one parent, chosen with probability ½ (slot swap).
+  A pair with only one flying slot is never blended.
 * **Generic:** without `slot_groups()` (benchmark functions) every gene is its own group, i.e.
   uniform crossover + BLX-α. Validated in `tests/test_ga.py` (known optima, every operator alone).
 * `sim optimise scenarios/orbital_example.json --algorithm ga --evals 2000`, or pick `ga` in the
   viewer's Optimiser tab. Report chapter: `report/LaTeX/chapters/ga.tex`.
 * Experiments: `python experiments/validate.py --only G2 GP GV4 GV5` (GA benchmarks, parameter study,
   the V4 settings, all-lit Eros); with V4 present, `SA_vs_GA.csv` compares both algorithms.
+  `--only H B` adds the hard cases and the 5000-evaluation budget sweep; `--only M NI` the matched
+  GA–SA comparison (Eros, N_max = 10, T_max = 10 d, 3000-facet mesh, seeds 0–2, 1200 evaluations) and
+  the equal-native-iterations run. `python experiments/ga_assets.py` rebuilds the GA tables and figures.
 
 Adding an algorithm: subclass `algorithms.base.Algorithm` (a `Params` dataclass and `run(problem, x0,
 callback)`), use `Recorder` for the budget, best design and history, and register it in

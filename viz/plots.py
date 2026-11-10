@@ -28,7 +28,7 @@ class Series:
     y: np.ndarray
     color: str
     width: float = 1.5
-    style: str = "line"          # line | dots | step
+    style: str = "line"          # line | dots | step | area (line with a soft fill below) | dash
     alpha: float = 1.0
     legend: bool = True
 
@@ -73,7 +73,11 @@ class PlotWidget(QtWidgets.QWidget):
         self.legend_loc = "tl"             # tl | tr | bl | br
         self.yfmt: Callable[[float], str] = fmt
         self.xfmt: Callable[[float], str] = fmt
-        self.setMinimumSize(260, 170)
+        self.empty_text = "no data yet"     # shown centred while there is nothing to draw
+        self.hover_unit = ""                # appended to y values in the hover readout
+        self._hover_px: QtCore.QPointF | None = None
+        self.setMinimumSize(220, 150)
+        self.setMouseTracking(True)
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
 
     # ------------------------------------------------------------------ data
@@ -153,10 +157,16 @@ class PlotWidget(QtWidgets.QWidget):
         small.setPointSizeF(max(7.0, small.pointSizeF() - 1.5))
         p.setFont(small)
         fm = QtGui.QFontMetrics(small)
+        if not self.has_data():
+            self._paint_frame(p, R, small, fm)
+            p.setPen(QtGui.QColor("#6c7899"))
+            p.drawText(R.adjusted(10, 0, -10, 0), Qt.AlignCenter | Qt.TextWordWrap, self.empty_text)
+            p.end()
+            return
 
         # grid + tick labels
         p.setPen(QtGui.QPen(GRID, 1))
-        for tx in nice_ticks(x0, x1, max(2, int(R.width() / 90))):
+        for tx in nice_ticks(x0, x1, max(2, int(R.width() / 70))):
             px = float(X(tx))
             p.setPen(QtGui.QPen(GRID, 1))
             p.drawLine(QtCore.QPointF(px, R.top()), QtCore.QPointF(px, R.bottom()))
@@ -201,8 +211,16 @@ class PlotWidget(QtWidgets.QWidget):
             path = QtGui.QPainterPath(QtCore.QPointF(px[0], py[0]))
             for a, b in zip(px[1:], py[1:]):
                 path.lineTo(a, b)
+            if s.style == "area" and len(px) > 1:
+                fill = QtGui.QPainterPath(path)
+                fill.lineTo(px[-1], R.bottom())
+                fill.lineTo(px[0], R.bottom())
+                fill.closeSubpath()
+                soft = QtGui.QColor(col)
+                soft.setAlphaF(0.14 * s.alpha)
+                p.fillPath(fill, soft)
             p.setBrush(Qt.NoBrush)
-            p.setPen(QtGui.QPen(col, s.width))
+            p.setPen(QtGui.QPen(col, s.width, Qt.DashLine if s.style == "dash" else Qt.SolidLine))
             p.drawPath(path)
         p.setClipping(False)
 
@@ -214,35 +232,14 @@ class PlotWidget(QtWidgets.QWidget):
             if self.cursor_text:
                 w = fm.horizontalAdvance(self.cursor_text) + 8
                 tx = min(cx + 4, R.right() - w)
-                box = QtCore.QRectF(tx, R.bottom() - fm.height() - 6, w, fm.height() + 2)
+                by = R.bottom() - fm.height() - 6 if self.legend_loc[0] == "t" else R.top() + 4
+                box = QtCore.QRectF(tx, by, w, fm.height() + 2)      # opposite the legend
                 p.fillRect(box, QtGui.QColor(10, 14, 28, 220))
                 p.setPen(QtGui.QColor("#ffffff"))
                 p.drawText(box, Qt.AlignCenter, self.cursor_text)
 
         # frame, title, labels, legend
-        p.setBrush(Qt.NoBrush)
-        p.setPen(QtGui.QPen(FRAME, 1))
-        p.drawRect(R)
-        bold = QtGui.QFont(self.font())
-        bold.setBold(True)
-        p.setFont(bold)
-        p.setPen(TITLE)
-        p.drawText(QtCore.QPointF(8, 18), self.title)
-        if self.subtitle:
-            p.setFont(small)
-            p.setPen(QtGui.QColor("#e8eeff"))
-            p.drawText(QtCore.QPointF(8, 34), self.subtitle)
-        p.setFont(small)
-        p.setPen(TEXT)
-        if self.xlabel:
-            p.drawText(QtCore.QPointF(R.right() - fm.horizontalAdvance(self.xlabel), self.height() - 6),
-                       self.xlabel)
-        if self.ylabel:
-            p.save()
-            p.translate(12, R.center().y() + fm.horizontalAdvance(self.ylabel) / 2)
-            p.rotate(-90)
-            p.drawText(QtCore.QPointF(0, 0), self.ylabel)
-            p.restore()
+        self._paint_frame(p, R, small, fm)
         entries = [self.series[n] for n in self.order if self.series[n].legend]
         lw = max((fm.horizontalAdvance(s.name) for s in entries), default=0) + 24
         lh = len(entries) * (fm.height() + 1)
@@ -256,7 +253,111 @@ class PlotWidget(QtWidgets.QWidget):
             p.setPen(TEXT)
             p.drawText(QtCore.QPointF(lx + 16, ly + fm.ascent()), s.name)
             ly += fm.height() + 1
+        self._paint_hover(p, R, X, Y, fm)
         p.end()
+
+    def has_data(self) -> bool:
+        return any(len(s.x) and np.isfinite(s.y).any() for s in self.series.values())
+
+    def _paint_frame(self, p, R, small, fm):
+        p.setBrush(Qt.NoBrush)
+        p.setPen(QtGui.QPen(FRAME, 1))
+        p.drawRect(R)
+        bold = QtGui.QFont(self.font())
+        bold.setBold(True)
+        p.setFont(bold)
+        p.setPen(TITLE)
+        title = QtGui.QFontMetrics(bold).elidedText(self.title, Qt.ElideRight, self.width() - 16)
+        p.drawText(QtCore.QPointF(8, 18), title)
+        if self.subtitle:
+            p.setFont(small)
+            p.setPen(QtGui.QColor("#e8eeff"))
+            p.drawText(QtCore.QPointF(8, 34), fm.elidedText(self.subtitle, Qt.ElideRight, self.width() - 16))
+        p.setFont(small)
+        p.setPen(TEXT)
+        if self.xlabel:
+            p.drawText(QtCore.QPointF(R.right() - fm.horizontalAdvance(self.xlabel), self.height() - 6),
+                       self.xlabel)
+        if self.ylabel:
+            p.save()
+            p.translate(12, R.center().y() + fm.horizontalAdvance(self.ylabel) / 2)
+            p.rotate(-90)
+            p.drawText(QtCore.QPointF(0, 0), self.ylabel)
+            p.restore()
+
+    def _hover_lines(self, x: float, X, Y) -> tuple[list[tuple[str, str]], list[tuple[float, float, str]]]:
+        """Readout at data x: (colour, text) rows and the points to mark."""
+        rows, marks = [], []
+        lines = [s for n in self.order if (s := self.series[n]).style != "dots" and len(s.x)]
+        if lines:
+            for s in lines:
+                if not (s.x.min() <= x <= s.x.max()):
+                    continue
+                if s.style == "step":
+                    k = max(int(np.searchsorted(s.x, x, side="right")) - 1, 0)
+                    y = s.y[k]
+                else:
+                    y = float(np.interp(x, s.x, s.y))
+                if np.isfinite(y):
+                    rows.append((s.color, f"{s.name}  {fmt(y)}{self.hover_unit}"))
+                    marks.append((float(X(x)), float(Y(y)), s.color))
+            return rows, marks
+        # scatter only: nearest dot within 14 px
+        best = None
+        hx, hy = self._hover_px.x(), self._hover_px.y()
+        for n in self.order:
+            s = self.series[n]
+            ok = np.isfinite(s.x) & np.isfinite(s.y)
+            if not ok.any():
+                continue
+            px, py = X(s.x[ok]), Y(s.y[ok])
+            d = np.hypot(px - hx, py - hy)
+            k = int(np.argmin(d))
+            if d[k] < 14 and (best is None or d[k] < best[0]):
+                best = (d[k], s, s.x[ok][k], s.y[ok][k], px[k], py[k])
+        if best is not None:
+            _, s, bx, by, px, py = best
+            rows.append((s.color, f"{s.name}: {fmt(bx)} {self._x_unit()}, {fmt(by)}{self.hover_unit}"))
+            marks.append((float(px), float(py), s.color))
+        return rows, marks
+
+    def _x_unit(self) -> str:
+        return self.xlabel.split("[")[1].rstrip("]") if "[" in self.xlabel else ""
+
+    def _paint_hover(self, p, R, X, Y, fm):
+        if self._hover_px is None or not R.contains(self._hover_px):
+            return
+        x0, x1, _, _ = self._limits()
+        x = x0 + (self._hover_px.x() - R.left()) / R.width() * (x1 - x0)
+        rows, marks = self._hover_lines(x, X, Y)
+        if not rows:
+            return
+        if any(s.style != "dots" for s in self.series.values()):
+            hx = self._hover_px.x()
+            p.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255, 70), 1))
+            p.drawLine(QtCore.QPointF(hx, R.top()), QtCore.QPointF(hx, R.bottom()))
+            rows.insert(0, (None, f"{self.xlabel.split(' [')[0] or 'x'}  {fmt(x)} {self._x_unit()}".rstrip()))
+        for mx, my, c in marks:                         # 2px surface ring keeps the dot legible
+            p.setPen(QtGui.QPen(BG, 2))
+            p.setBrush(QtGui.QColor(c))
+            p.drawEllipse(QtCore.QPointF(mx, my), 4, 4)
+        w = max(fm.horizontalAdvance(t) for _, t in rows) + 26
+        h = len(rows) * (fm.height() + 1) + 6
+        bx = self._hover_px.x() + 12
+        if bx + w > R.right():
+            bx = self._hover_px.x() - 12 - w
+        by = min(max(self._hover_px.y() - h / 2, R.top()), R.bottom() - h)
+        box = QtCore.QRectF(bx, by, w, h)
+        p.setPen(QtGui.QPen(FRAME, 1))
+        p.setBrush(QtGui.QColor(14, 18, 34, 235))
+        p.drawRoundedRect(box, 4, 4)
+        y = by + 3
+        for c, t in rows:
+            if c is not None:
+                p.fillRect(QtCore.QRectF(bx + 7, y + fm.ascent() / 2 - 2, 9, 3), QtGui.QColor(c))
+            p.setPen(QtGui.QColor("#e8eeff") if c is None else TEXT)
+            p.drawText(QtCore.QPointF(bx + (20 if c is not None else 7), y + fm.ascent()), t)
+            y += fm.height() + 1
 
     @staticmethod
     def _reduce(px: np.ndarray, py: np.ndarray, width: float):
@@ -280,5 +381,12 @@ class PlotWidget(QtWidgets.QWidget):
             self.clicked.emit(x0 + (ev.pos().x() - R.left()) / R.width() * (x1 - x0))
 
     def mouseMoveEvent(self, ev):
+        self._hover_px = QtCore.QPointF(ev.pos())
         if ev.buttons() & Qt.LeftButton:
             self.mousePressEvent(ev)
+        self.update()
+
+    def leaveEvent(self, ev):
+        self._hover_px = None
+        self.update()
+        super().leaveEvent(ev)

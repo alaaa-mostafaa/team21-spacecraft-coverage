@@ -3,8 +3,8 @@
     python experiments/ga_assets.py                              # results/validation -> report/LaTeX
     python experiments/ga_assets.py --results DIR --report DIR
 
-Reads the rows written by validate.py (parts V2, V4, V5 for SA / random search; G2, GP, GV4, GV5 for
-the GA) and writes
+Reads the rows written by validate.py (parts V2, V4, V5 for SA / random search; G2, GP, GV4, GV5, H, B,
+M, NI for the GA) and writes
     Figures/fig_ga_params.png          GA parameter study (part GP)
     Figures/fig_sa_vs_ga.png           best J of every run, SA / GA / random search, per case study
     Figures/fig_convergence_sa_ga.png  best J against evaluations, median and interquartile band
@@ -15,6 +15,7 @@ the GA) and writes
     generated/tab_g2.tex               benchmark functions, SA (V2) and GA (G2)
     generated/tab_gp.tex               parameter study table
     generated/tab_sa_ga.tex            SA vs GA performance indices per case study
+    generated/tab_matched.tex          matched GA-SA comparison, one row per seed (part M)
     generated/numbers_ga.tex           numbers quoted in the text (\\newcommand)
 Parts that are missing are skipped.
 """
@@ -157,7 +158,7 @@ def fig_generations(raw, out, plt, label="Eros 10 d"):
     ax[1].plot(gen, g["diversity"], color=INK, lw=2)
     ax[1].set_ylabel("diversity")
     ax[1].set_ylim(bottom=0)
-    ax[1].set_title("spread of the genes", loc="left", fontsize=8.5)
+    ax[1].set_title("spread of the active genes", loc="left", fontsize=8.5)
     ax[2].fill_between(gen, g["N_min"], g["N_max"], color=COL["ga"], alpha=0.15, lw=0)
     ax[2].plot(gen, g["N_mean"], color=COL["ga"], lw=2)
     ax[2].set_ylabel("fleet size N")
@@ -330,6 +331,26 @@ def tab_budget(raw, summary, gen):
     (gen / "tab_budget.tex").write_text("\n".join(lines) + "\n")
 
 
+def tab_matched(raw, gen):
+    """Part M: one row per seed and algorithm, then the means."""
+    rr = runs(raw, "M")
+    if not rr:
+        return
+    lines = [r"\begin{tabular}{@{}ccrrrrr@{}}", r"\toprule",
+             r"Seed & Algorithm & $J$ & Coverage [\%] & $T$ [d] & $N$ & Runtime [s] \\", r"\midrule"]
+    for r in sorted(rr, key=lambda x: (x["seed"], x["algo"] != "ga")):
+        lines.append(f"{r['seed']} & {r['algo'].upper()} & {r['J']:.4f} & {100 * r['C']:.2f} & {r['T_days']:.2f} & "
+                     f"{r['N']} & {r['seconds']:.2f} \\\\")
+    lines.append(r"\midrule")
+    for algo in ("ga", "sa"):
+        a = [r for r in rr if r["algo"] == algo]
+        lines.append(f"{algo.upper()} mean & & {np.mean([r['J'] for r in a]):.4f} & {100 * np.mean([r['C'] for r in a]):.2f} & "
+                     f"{np.mean([r['T_days'] for r in a]):.2f} & {np.mean([r['N'] for r in a]):.2f} & "
+                     f"{np.mean([r['seconds'] for r in a]):.2f} \\\\")
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    (gen / "tab_matched.tex").write_text("\n".join(lines) + "\n")
+
+
 def numbers(raw, summary, gen):
     """\\newcommand macros for numbers quoted in the text."""
     m = {}
@@ -348,6 +369,17 @@ def numbers(raw, summary, gen):
     if g:
         m["gaFeasible"] = sum(r["feasible"] for r in g)
         m["gaRuns"] = len(g)
+    for part, tag in (("M", "matched"), ("NI", "native")):          # matched comparison, native iterations
+        for algo in ("ga", "sa"):
+            a = runs(raw, part, algo)
+            if not a:
+                continue
+            pre = f"{algo}{tag.capitalize()}"
+            m[f"{pre}J"] = f"{np.mean([r['J'] for r in a]):.4f}"
+            m[f"{pre}C"] = f"{100 * np.mean([r['C'] for r in a]):.2f}"
+            m[f"{pre}Evals"] = f"{np.mean([r['evals'] for r in a]):.0f}"
+            m[f"{pre}Seeds"] = len(a)
+            m[f"{pre}Feasible"] = sum(r["feasible"] for r in a)
     lines = [f"\\newcommand{{\\{k}}}{{{val}}}" for k, val in m.items()]
     (gen / "numbers_ga.tex").write_text("\n".join(lines) + "\n")
 
@@ -374,6 +406,7 @@ def main():
     tab_sa_ga(raw, gen)
     tab_hard(summary, gen)
     tab_budget(raw, summary, gen)
+    tab_matched(raw, gen)
     numbers(raw, summary, gen)
     print("written:", *sorted(p.name for p in figs.glob("fig_*ga*.png")), *sorted(p.name for p in gen.glob("*g*.tex")))
 

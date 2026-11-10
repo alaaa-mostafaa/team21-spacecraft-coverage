@@ -4,6 +4,7 @@ venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+.work/
 
 # macOS
 .DS_Store
@@ -15,6 +16,7 @@ data/kleopatra/cache/
 # experiment by-products (raw.json / summary.json hold every result)
 results/validation/runs_partial.jsonl
 results/validation_m3_backup/
+screenshots/
 
 # LaTeX build files
 *.aux

@@ -190,7 +190,8 @@ def tab_runtime(raw):
             body.append([lab.replace(", N_max 10", ""), b.capitalize(), tmax_label(t_max), n_max,
                          1 + 5 * n_max, int(round(t_max * 144)) + 1, f"{s.mean() / 60:.1f}",
                          f"{np.mean([r['evals'] for r in rr]) / s.mean():.1f}"])
-    table("tab_runtime", "Size of the case studies and the cost of one \\ac{SA} run (2000 evaluations, one CPU core)",
+    table("tab_runtime", "Size of the case studies and the cost of one \\ac{SA} run (2000 evaluations, one CPU core; "
+          "nine single-threaded runs in parallel on one machine)",
           "tab:cost", ["Setting", "Body", "$T_{\\max}$", "$N_{\\max}$", "Variables", "Steps $N_t$", "Minutes per run",
                        "Evaluations / s"], body, "@{}lllccccc@{}", size="scriptsize")
 
@@ -198,13 +199,14 @@ def tab_runtime(raw):
 def tab_params(summary):
     body = []
     for r in summary.get("P", []):
-        name = (r["setting"].replace("alpha ", "$\\alpha=$ ").replace("p0 ", "$p_0=$ ")
-                .replace("step0 ", "$\\sigma_0=$ ").replace("no warm start", "one random start"))
+        # "step0" first: replacing "p0 " first would also hit the end of "step0 " (-> "ste$p_0=$")
+        name = (r["setting"].replace("step0 ", "$\\sigma_0=$ ").replace("alpha ", "$\\alpha=$ ")
+                .replace("p0 ", "$p_0=$ ").replace("no warm start", "one random start"))
         body.append([name, f"{r['mean_alpha']:.3f}", r["runs"], ms([r["mean_J"]], "{:.4f}").split(" ")[0]
                      + f" $\\pm$ {r['std_J']:.4f}", f"{r['best_J']:.4f}", f"{r['worst_J']:.4f}", pct(r["mean_C"]),
                      f"{r['mean_N']:.1f}", f"{r['mean_evals']:.0f}"])
     table("tab_params", "Case E: effect of the \\ac{SA} parameters (Eros, $T_{\\max}=2$\\,d, $N_{\\max}=5$; one "
-          "parameter changed at a time from the defaults)", "tab:params",
+          "parameter changed at a time from the defaults)", "tab:sa-params",
           ["Setting", "$\\alpha$ used", "Runs", "$J$ (mean $\\pm$ std)", "Best", "Worst", "Mean $C$", "Mean $N$",
            "Evaluations"], body, "@{}lcccccccc@{}", size="scriptsize")
 
@@ -524,24 +526,35 @@ def fig_flowchart():
     plt.close(fig)
 
 
+SA_PARTS = ("V4", "V5", "V6", "P")       # the validation runs and the parameter study of the SA chapters
+
+
 def numbers(raw, summary, stats):
-    """LaTeX macros for numbers quoted in the text."""
+    """LaTeX macros for numbers quoted in the text.  Run counts and the finer-mesh check (V7) cover
+    the SA chapters only (parts V4, V5, V6, P: SA and the random search of V4); the GA parts have
+    their own numbers (experiments/ga_assets.py)."""
     m = {}
-    if raw:
-        m["nRuns"] = str(len(raw))
-        m["nFeasible"] = str(sum(r["feasible"] for r in raw))
-    v7 = summary.get("V7")
-    if v7:
-        m["fineDesigns"] = str(v7["designs"])
-        m["fineMeanDC"] = f"{v7['mean_abs_dC_points']:.2f}"
-        m["fineMaxDC"] = f"{v7['max_abs_dC_points']:.2f}"
+    sa_raw = [r for r in raw if r["part"] in SA_PARTS]
+    if sa_raw:
+        m["nRuns"] = str(len(sa_raw))
+        m["nFeasible"] = str(sum(r["feasible"] for r in sa_raw))
+    fine = [r for r in sa_raw if "C_fine" in r and "C" in r]
+    if fine:
+        dC = 100 * np.abs([r["C_fine"] - r["C"] for r in fine])
+        dJ = [r["J_fine"] - r["J"] for r in fine]
+        m["fineDesigns"] = str(len(fine))
+        m["fineDesignsRandom"] = str(sum(r["algo"] == "random" for r in fine))
+        m["fineMeanDC"] = f"{dC.mean():.2f}"
+        m["fineMaxDC"] = f"{dC.max():.2f}"
+        m["fineMeanDJ"] = f"{np.mean(dJ):.3f}"
     for body, d in stats.items():
         b = body.capitalize()
         m[f"aMedian{b}"] = f"{np.median(d['a_over_R']):.1f}"
         m[f"incMedian{b}"] = f"{np.median(d['inc']):.0f}"
         m[f"incPolar{b}"] = f"{100 * np.mean((d['inc'] > 45) & (d['inc'] < 135)):.0f}"
         m[f"nOrbits{b}"] = str(len(d["inc"]))
-    info = json.loads((RES / "run_info.json").read_text()) if (RES / "run_info.json").exists() else {}
+    info_path = RES / "run_info_main.json"                   # the run of V2-V6 (run_info.json: the latest run)
+    info = json.loads(info_path.read_text()) if info_path.exists() else {}
     if info.get("wall_seconds"):
         m["valHours"] = f"{info['wall_seconds'] / 3600:.1f}"
     (GEN / "numbers.tex").write_text("\n".join(f"\\newcommand{{\\{k}}}{{{v}}}" for k, v in m.items()) + "\n")
